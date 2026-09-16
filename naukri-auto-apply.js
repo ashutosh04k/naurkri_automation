@@ -180,8 +180,19 @@ async function applyToJob(page, jobUrl, applied) {
     if (DRY_RUN) return 'dry-run';
 
     await btn.click();
+    await sleep(3000);
+
+    // Check if Naukri redirected to a success page (no modal needed)
+    const successText = await page.locator('text=Applied to, text=Application submitted, text=Successfully applied').first().isVisible().catch(() => false);
+    if (successText) { applied.add(jobUrl); return 'applied'; }
+
     const ok = await fillApplyModal(page);
     if (ok) { applied.add(jobUrl); return 'applied'; }
+
+    // Check success page one more time after modal interaction
+    const successAfter = await page.locator('text=Applied to').first().isVisible().catch(() => false);
+    if (successAfter) { applied.add(jobUrl); return 'applied'; }
+
     return 'modal-failed';
   } catch (err) {
     return `error: ${err.message.slice(0, 100)}`;
