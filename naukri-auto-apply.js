@@ -94,7 +94,7 @@ async function collectJobLinks(page, url) {
 
 // ── Handle the apply modal / form that appears after clicking Apply ───────────
 async function fillApplyModal(page) {
-  await sleep(1500);
+  await sleep(3000);
 
   // Notice period
   const noticeSel = [
@@ -128,15 +128,32 @@ async function fillApplyModal(page) {
     if (await el.isVisible().catch(() => false)) await el.fill(CV.expectedCTC);
   }
 
-  // Click Apply / Submit button inside the modal
-  const btn = page.locator(
-    'button:has-text("Apply"), button:has-text("Submit"), button:has-text("APPLY")'
-  ).last();
-  if (await btn.isVisible().catch(() => false)) {
-    await btn.click();
-    await sleep(2000);
-    return true;
+  // Try all common Naukri submit button variations
+  const submitSelectors = [
+    'button:has-text("Apply")',
+    'button:has-text("Submit")',
+    'button:has-text("APPLY")',
+    'button:has-text("Submit Application")',
+    'button:has-text("Apply Now")',
+    'button:has-text("Confirm")',
+    'button:has-text("Send Application")',
+    'button[type="submit"]',
+    '.apply-button',
+    '#apply-button',
+    'button.waves-effect',
+  ];
+
+  for (const sel of submitSelectors) {
+    const btn = page.locator(sel).last();
+    if (await btn.isVisible().catch(() => false)) {
+      await btn.click();
+      await sleep(2000);
+      return true;
+    }
   }
+
+  // Screenshot for debugging when all selectors fail
+  await page.screenshot({ path: path.join(__dirname, `modal-failed-${Date.now()}.png`) }).catch(() => {});
   return false;
 }
 
