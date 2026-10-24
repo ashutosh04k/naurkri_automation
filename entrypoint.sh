@@ -12,5 +12,5 @@ export DISPLAY=:99
 # Brief pause to ensure Xvfb socket is created
 sleep 1
 
-echo "Starting cron-worker.js..."
-exec node cron-worker.js
+echo "Starting server.js (Web Dashboard & Hourly Auto-Refresh)..."
+exec node server.js

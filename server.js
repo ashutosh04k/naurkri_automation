@@ -249,6 +249,20 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Health check endpoint for Render monitoring
+  if ((pathname === '/health' || pathname === '/api/health') && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: 'ok',
+      service: 'Naukri Automation Hub Dashboard & Hourly Cron',
+      isRunning: Boolean(activeTask),
+      currentTask: activeTask ? activeTask.name : null,
+      ...getStats(),
+      uptimeSeconds: Math.floor(process.uptime()),
+    }, null, 2));
+    return;
+  }
+
   // 2. Status API
   if (pathname === '/api/status' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -399,4 +413,36 @@ server.listen(PORT, HOST, () => {
   console.log(`👉 Access URL: http://localhost:${PORT}`);
   console.log(`👉 Network URL: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}`);
   console.log(`============================================================\n`);
+
+  // Hourly Auto-Refresh Cron
+  const AUTO_REFRESH_MINS = parseInt(process.env.REFRESH_INTERVAL_MINS, 10) || 60;
+  const AUTO_REFRESH_MS = AUTO_REFRESH_MINS * 60 * 1000;
+
+  console.log(`⏱️ Hourly Auto-Refresh Cron active: Runs every ${AUTO_REFRESH_MINS} minutes`);
+
+  // Startup run (8 seconds after server is healthy)
+  setTimeout(() => {
+    if (!activeTask) {
+      console.log('\n[Auto-Cron] Starting initial profile refresh on boot...');
+      try {
+        runScript('naukri-profile-refresh.js', [], 'Hourly Profile Refresh (Startup)');
+      } catch (err) {
+        console.error('[Auto-Cron] Startup run failed:', err.message);
+      }
+    }
+  }, 8000);
+
+  // Recurring hourly timer
+  setInterval(() => {
+    if (!activeTask) {
+      console.log('\n[Auto-Cron] Starting scheduled hourly profile refresh...');
+      try {
+        runScript('naukri-profile-refresh.js', [], 'Hourly Profile Refresh');
+      } catch (err) {
+        console.error('[Auto-Cron] Scheduled run failed:', err.message);
+      }
+    } else {
+      console.log(`\n[Auto-Cron] Task "${activeTask.name}" currently active, skipping this cycle.`);
+    }
+  }, AUTO_REFRESH_MS);
 });

@@ -15,6 +15,7 @@ COPY package*.json ./
 
 # Install production dependencies
 RUN npm install
+RUN npx playwright install chromium
 
 # Copy application source code
 COPY . .
