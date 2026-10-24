@@ -16,5 +16,3 @@ services:
         sync: false
       - key: GOOGLE_PASSWORD
         sync: false
-      - key: NAUKRI_SESSION_BASE64
-        sync: false

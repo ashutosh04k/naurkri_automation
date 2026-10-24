@@ -30,21 +30,64 @@ const log = (msg) => {
 };
 
 function ensureSessionRestored() {
-  const sessionBase64 = process.env.NAUKRI_SESSION_BASE64;
-  if (!sessionBase64) return;
-
   const cookiesPath = path.join(PROFILE_DIR, 'Default', 'Cookies');
   if (fs.existsSync(cookiesPath)) return; // already restored
 
-  try {
-    fs.mkdirSync(PROFILE_DIR, { recursive: true });
-    const tmpTar = path.join(PROFILE_DIR, 'session.tar.gz');
-    fs.writeFileSync(tmpTar, Buffer.from(sessionBase64.trim(), 'base64'));
-    execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
-    if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
-    log('Restored Naukri Chrome session from NAUKRI_SESSION_BASE64.');
-  } catch (err) {
-    log(`Warning: Failed to unpack NAUKRI_SESSION_BASE64: ${err.message}`);
+  // 1. Check Render Secret Files (avoids ARG_MAX shell limits)
+  const secretArchives = [
+    '/etc/secrets/session.tar.gz',
+    '/etc/secrets/naukri-session.tar.gz',
+    path.join(__dirname, 'session.tar.gz'),
+    path.join(__dirname, 'naukri-session.tar.gz'),
+  ];
+  for (const archivePath of secretArchives) {
+    if (fs.existsSync(archivePath)) {
+      try {
+        fs.mkdirSync(PROFILE_DIR, { recursive: true });
+        execSync(`tar -xzf "${archivePath}" -C "${PROFILE_DIR}"`);
+        log(`Restored Naukri Chrome session from secret file: ${archivePath}`);
+        return;
+      } catch (err) {
+        log(`Warning: Failed to unpack ${archivePath}: ${err.message}`);
+      }
+    }
+  }
+
+  // 2. Check Render Secret text files
+  const secretTexts = [
+    '/etc/secrets/session-env.txt',
+    path.join(__dirname, 'session-env.txt'),
+  ];
+  for (const textPath of secretTexts) {
+    if (fs.existsSync(textPath)) {
+      try {
+        fs.mkdirSync(PROFILE_DIR, { recursive: true });
+        const b64 = fs.readFileSync(textPath, 'utf8').trim();
+        const tmpTar = path.join(PROFILE_DIR, 'tmp-session.tar.gz');
+        fs.writeFileSync(tmpTar, Buffer.from(b64, 'base64'));
+        execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
+        if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
+        log(`Restored Naukri Chrome session from secret file: ${textPath}`);
+        return;
+      } catch (err) {
+        log(`Warning: Failed to unpack ${textPath}: ${err.message}`);
+      }
+    }
+  }
+
+  // 3. Fallback to environment variable if present
+  const sessionBase64 = process.env.NAUKRI_SESSION_BASE64;
+  if (sessionBase64) {
+    try {
+      fs.mkdirSync(PROFILE_DIR, { recursive: true });
+      const tmpTar = path.join(PROFILE_DIR, 'session.tar.gz');
+      fs.writeFileSync(tmpTar, Buffer.from(sessionBase64.trim(), 'base64'));
+      execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
+      if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
+      log('Restored Naukri Chrome session from NAUKRI_SESSION_BASE64.');
+    } catch (err) {
+      log(`Warning: Failed to unpack NAUKRI_SESSION_BASE64: ${err.message}`);
+    }
   }
 }
 

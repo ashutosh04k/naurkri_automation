@@ -46,16 +46,16 @@ try {
 
   const archiveBuffer = fs.readFileSync(ARCHIVE_FILE);
   const base64Str = archiveBuffer.toString('base64');
-
   fs.writeFileSync(OUTPUT_TXT, base64Str);
-  fs.unlinkSync(ARCHIVE_FILE);
 
   console.log('\n============================================================');
   console.log('✅ Session exported successfully!');
-  console.log(`📁 Saved base64 string to: ${OUTPUT_TXT} (${Math.round(base64Str.length / 1024)} KB)`);
-  console.log('\n👉 On Render:');
-  console.log('   Add an Environment Variable named: NAUKRI_SESSION_BASE64');
-  console.log('   Value: Paste the contents of session-env.txt');
+  console.log(`📁 1. Binary Archive: ${ARCHIVE_FILE} (${Math.round(archiveBuffer.length / 1024)} KB)`);
+  console.log(`📁 2. Base64 Text:    ${OUTPUT_TXT} (${Math.round(base64Str.length / 1024)} KB)`);
+  console.log('\n👉 Recommended for Render (prevents "argument list too long" error):');
+  console.log('   Go to Service Settings -> Environment -> Secret Files -> "Add Secret File"');
+  console.log('   - File Name: session.tar.gz');
+  console.log('   - File Content: Upload or paste the contents of naukri-session.tar.gz');
   console.log('============================================================\n');
 } catch (err) {
   console.error('Failed to export session:', err.message);
