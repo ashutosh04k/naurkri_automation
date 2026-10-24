@@ -11,6 +11,10 @@ const { CV, naukriProfileUrl } = require('./config');
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+const AUTO_REFRESH_MINS = parseInt(process.env.REFRESH_INTERVAL_MINS, 10) || 60;
+const AUTO_REFRESH_MS = AUTO_REFRESH_MINS * 60 * 1000;
+let nextCronTimestamp = Date.now() + AUTO_REFRESH_MS;
+
 const APPLIED_FILE = path.join(__dirname, 'applied-jobs.json');
 const EXTERNAL_FILE = path.join(__dirname, 'external-jobs.json');
 const EXTERNAL_CSV = path.join(__dirname, 'external-jobs.csv');
@@ -95,6 +99,8 @@ function getStats() {
     isRunning: Boolean(activeTask),
     currentTask: activeTask ? activeTask.name : null,
     taskStartTime: activeTask ? activeTask.startTime : null,
+    nextCronTimestamp,
+    autoRefreshIntervalMins: AUTO_REFRESH_MINS,
   };
 }
 
@@ -257,9 +263,24 @@ const server = http.createServer((req, res) => {
       service: 'Naukri Automation Hub Dashboard & Hourly Cron',
       isRunning: Boolean(activeTask),
       currentTask: activeTask ? activeTask.name : null,
+      nextScheduledRun: new Date(nextCronTimestamp).toISOString(),
       ...getStats(),
       uptimeSeconds: Math.floor(process.uptime()),
     }, null, 2));
+    return;
+  }
+
+  // Trigger cron run on demand via simple GET (ideal for external webhook / cron-job.org)
+  if ((pathname === '/api/cron/run' || pathname === '/refresh-cron') && req.method === 'GET') {
+    if (activeTask) {
+      res.writeHead(409, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `Task "${activeTask.name}" already in progress` }));
+      return;
+    }
+    nextCronTimestamp = Date.now() + AUTO_REFRESH_MS;
+    runScript('naukri-profile-refresh.js', [], 'Hourly Cron Refresh');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, message: 'Hourly profile refresh triggered successfully.' }));
     return;
   }
 

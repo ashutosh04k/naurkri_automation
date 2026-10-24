@@ -66,6 +66,13 @@
 
     <!-- Live Status & Quick Actions -->
     <div class="flex items-center gap-3">
+      <!-- Hourly Cron Countdown Pill -->
+      <div id="cronCountdownBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs text-slate-300" title="Next automatic hourly profile refresh">
+        <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-slate-400">Next Auto-Refresh:</span>
+        <span id="cronCountdownTimer" class="font-mono text-indigo-300 font-semibold">--:--</span>
+      </div>
+
       <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-surface-border text-xs">
         <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
         <span id="statusText" class="font-medium text-slate-300">Ready</span>
@@ -322,6 +329,23 @@
     let isTaskRunning = false;
     let timerInterval = null;
     let taskStartTime = null;
+    let nextCronTimestamp = null;
+    let cronCountdownInterval = null;
+
+    function updateCronCountdown() {
+      if (!nextCronTimestamp) return;
+      const diffMs = nextCronTimestamp - Date.now();
+      const el = document.getElementById('cronCountdownTimer');
+      if (!el) return;
+      if (diffMs <= 0) {
+        el.textContent = 'Triggering...';
+        return;
+      }
+      const totalSec = Math.floor(diffMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      el.textContent = `${m}m ${String(s).padStart(2, '0')}s`;
+    }
 
     // Initialize SSE (Server-Sent Events)
     function setupSSE() {
@@ -406,6 +430,13 @@
       }
       if (stats.lastRefreshText) {
         document.getElementById('statLastRefresh').textContent = stats.lastRefreshText;
+      }
+      if (stats.nextCronTimestamp) {
+        nextCronTimestamp = stats.nextCronTimestamp;
+        updateCronCountdown();
+        if (!cronCountdownInterval) {
+          cronCountdownInterval = setInterval(updateCronCountdown, 1000);
+        }
       }
 
       if (isTaskRunning) {
