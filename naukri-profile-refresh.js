@@ -31,8 +31,12 @@ const log = (msg) => {
 
 function ensureSessionRestored() {
   const cookiesPath = path.join(PROFILE_DIR, 'Default', 'Cookies');
-  if (fs.existsSync(cookiesPath)) return; // already restored
+  if (fs.existsSync(cookiesPath)) {
+    log('Using existing saved Chrome profile session.');
+    return;
+  }
 
+  log('Checking for session secret files or archives...');
   // 1. Check Render Secret Files (avoids ARG_MAX shell limits)
   const secretArchives = [
     '/etc/secrets/session.tar.gz',
@@ -153,6 +157,7 @@ async function googleLogin(ctx, page) {
 }
 
 async function refreshProfile() {
+  log('Starting profile refresh procedure...');
   ensureSessionRestored();
 
   const launchArgs = [
@@ -176,10 +181,14 @@ async function refreshProfile() {
     launchOptions.channel = 'chrome';
   }
 
-  const ctx = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
-  let page = ctx.pages()[0] || (await ctx.newPage());
+  let ctx = null;
 
   try {
+    log('Launching browser persistent context...');
+    ctx = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
+    let page = ctx.pages()[0] || (await ctx.newPage());
+
+    log(`Navigating to profile: ${PROFILE_URL}...`);
     await page.goto(PROFILE_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     if (!onProfile(new URL(page.url()))) {
@@ -218,19 +227,24 @@ async function refreshProfile() {
     log(actionMsg);
     return { success: true, message: actionMsg, headline: updated };
   } catch (err) {
-    const pages = ctx.pages();
-    for (let i = 0; i < pages.length; i++) {
-      await pages[i].screenshot({ path: ERROR_SHOT.replace('.png', `-${i}.png`) }).catch(() => {});
+    if (ctx) {
+      const pages = ctx.pages();
+      for (let i = 0; i < pages.length; i++) {
+        await pages[i].screenshot({ path: ERROR_SHOT.replace('.png', `-${i}.png`) }).catch(() => {});
+      }
     }
-    log(`ERROR: ${err.message.split('\n')[0]} (screenshots: naukri-refresh-error-*.png)`);
+    log(`ERROR: ${err.message}`);
     throw err;
   } finally {
-    await ctx.close();
+    if (ctx) {
+      await ctx.close().catch(() => {});
+    }
   }
 }
 
 if (require.main === module) {
   refreshProfile().catch((err) => {
+    console.error(`[FATAL ERROR]:`, err.message || err);
     process.exitCode = 1;
   });
 }
