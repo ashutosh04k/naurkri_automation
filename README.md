@@ -120,9 +120,83 @@ cat naukri-apply.log | grep APPLIED
 
 ---
 
+## Deploy to Render (Hourly Auto-Refresh)
+
+Deploy the automation to **Render** so your Naukri profile refreshes automatically every hour on the cloud without needing your computer on.
+
+### 1. Export your local logged-in session
+Render runs headlessly in the cloud and cannot show a browser window for Google 2FA. Export your active session:
+```bash
+npm run export-session
+```
+This generates a file named `session-env.txt` (git-ignored) containing your encrypted session string.
+
+### 2. Push repository to GitHub
+```bash
+git add .
+git commit -m "feat: add render docker cron deployment"
+git push origin main
+```
+
+### 3. Create Web Service on Render
+1. Go to [dashboard.render.com](https://dashboard.render.com) and click **New +** → **Web Service**.
+2. Connect your GitHub repository.
+3. Render will auto-detect the **Docker** runtime from `Dockerfile`.
+4. Choose the **Free** instance plan.
+5. In **Environment Variables**, add:
+   - `NAUKRI_SESSION_BASE64`: *(Copy and paste the entire string from `session-env.txt`)*
+   - `GOOGLE_EMAIL`: *(Your Google/Naukri email)*
+   - `GOOGLE_PASSWORD`: *(Your password - used as fallback)*
+   - `REFRESH_INTERVAL_MINS`: `60`
+6. Click **Deploy Web Service**.
+
+### 4. Health & Live Monitoring
+Once deployed, Render gives you a live URL (`https://your-service.onrender.com`):
+- `https://your-service.onrender.com/health` → Shows current status, last refresh timestamp, next scheduled run, and uptime.
+- `https://your-service.onrender.com/refresh` → Triggers an instant refresh on demand.
+- `https://your-service.onrender.com/logs` → Displays recent refresh logs.
+
+> [!TIP]
+> To keep Render's free tier from sleeping, set up a free 15-minute ping on [cron-job.org](https://cron-job.org) or [UptimeRobot](https://uptimerobot.com) targeting `https://your-service.onrender.com/health`.
+
+---
+
+## Web Dashboard (One-Click Control Center)
+
+Launch the real-time web dashboard:
+
+```bash
+npm start
+# or: node server.js
+```
+
+Open **`http://localhost:3000`** in any browser.
+
+### Features
+- **⚡ One-Click Master Button**: Executes profile refresh followed immediately by auto-apply.
+- **📡 Real-Time Console**: Streams browser terminal stdout/stderr live to your screen via Server-Sent Events (SSE).
+- **📊 Extracted Data Sidebar**:
+  - **External Jobs Tab**: View company-site jobs, copy direct links, or export to CSV / HTML.
+  - **Applied Jobs Tab**: History of jobs applied with title, company, and links.
+  - **Profile Details**: Fast snapshot of candidate details and matching parameters.
+
+### Making it Live
+- **Local Network**: Accessible on your LAN via `http://<your-ip>:3000`.
+- **Public URL (Free & Secure via Cloudflare Tunnel)**:
+  ```bash
+  npx cloudflared tunnel --url http://localhost:3000
+  ```
+- **Public URL (via ngrok)**:
+  ```bash
+  ngrok http 3000
+  ```
+
+---
+
 ## npm scripts
 
 ```bash
+npm start          # Launch web dashboard (http://localhost:3000)
 npm run login      # First-time Google login (opens visible Chrome)
 npm run refresh    # Manual profile refresh
 npm run apply      # Run auto-apply now
@@ -161,3 +235,4 @@ npm run apply:dry  # Dry run — shows matches without applying
 ## Disclaimer
 
 Automating your own profile and applications may be against Naukri's Terms of Service. Both scripts operate at a slow, human-like rate and only act on your own account, but use at your own risk.
+# naurkri_automation
