@@ -214,6 +214,19 @@ function stopCurrentTask() {
   return { ok: true, message: `Terminated ${taskName}` };
 }
 
+function formatIST(d = new Date()) {
+  try {
+    return new Date(d).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+      hour12: true,
+    }) + ' IST';
+  } catch {
+    return new Date(d).toLocaleString() + ' IST';
+  }
+}
+
 // HTTP Server
 const server = http.createServer((req, res) => {
   const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -264,11 +277,14 @@ const server = http.createServer((req, res) => {
       status: 'ok',
       service: 'Naukri Automation Hub Dashboard & Hourly Cron',
       serverStatus: isBusy ? `BUSY (executing: ${activeTask.name})` : 'HEALTHY & IDLE (waiting for next trigger)',
+      currentTimeIST: formatIST(new Date()),
+      currentTimeUTC: new Date().toISOString(),
       isCurrentlyAutomating: isBusy,
       currentTask: activeTask ? activeTask.name : null,
       cronScheduler: {
         enabled: true,
         intervalMinutes: AUTO_REFRESH_MINS,
+        nextScheduledRunIST: formatIST(nextCronTimestamp),
         nextScheduledRunUTC: new Date(nextCronTimestamp).toISOString(),
       },
       lastRunResult: stats.lastRefreshText,

@@ -23,8 +23,16 @@ const LOG_FILE = path.join(__dirname, 'naukri-refresh.log');
 const ERROR_SHOT = path.join(__dirname, 'naukri-refresh-error.png');
 const LOGIN_MODE = process.argv[2] === 'login';
 
+const formatIST = (d = new Date()) => {
+  try {
+    return new Date(d).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+  } catch {
+    return new Date(d).toLocaleString();
+  }
+};
+
 const log = (msg) => {
-  const line = `[${new Date().toLocaleString()}] ${msg}`;
+  const line = `[${formatIST()} IST] ${msg}`;
   console.log(line);
   try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
 };

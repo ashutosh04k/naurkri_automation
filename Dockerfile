@@ -3,12 +3,16 @@ FROM mcr.microsoft.com/playwright:v1.49.0-noble
 
 WORKDIR /app
 
-# Install Xvfb and xauth for virtual display
+# Install Xvfb, xauth, and tzdata for Indian Standard Time
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     xauth \
     tar \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Indian Standard Time (IST)
+ENV TZ="Asia/Kolkata"
 
 # Copy dependency manifests
 COPY package*.json ./
