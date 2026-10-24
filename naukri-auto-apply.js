@@ -37,10 +37,23 @@ const BLOCKED_COMPANIES = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
+const formatIST = (d = new Date()) => {
+  try {
+    return new Date(d).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      hour12: true,
+    }) + ' IST';
+  } catch {
+    return new Date(d).toLocaleString();
+  }
+};
+
 const log = (msg) => {
-  const line = `[${new Date().toLocaleString()}] ${msg}`;
+  const line = `[${formatIST()}] ${msg}`;
   console.log(line);
-  fs.appendFileSync(LOG_FILE, line + '\n');
+  try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
 };
 
 const loadApplied = () => {
@@ -91,12 +104,12 @@ function exportExternal(external) {
   fs.writeFileSync(EXTERNAL_FILE, JSON.stringify(external, null, 2));
 
   const rows = Object.values(external)
-    .sort((a, b) => (b.postedOn || '').localeCompare(a.postedOn || ''));
+    .sort((a, b) => (b.extractedAtTimestamp || 0) - (a.extractedAtTimestamp || 0));
 
-  // CSV (BOM added so Excel shows special characters correctly)
-  const headers = ['Title', 'Company', 'Location', 'Experience', 'Posted On', 'Found On', 'Company Apply Link', 'Naukri Link'];
-  const keys    = ['title', 'company', 'location', 'experience', 'postedOn', 'foundOn', 'externalUrl', 'naukriUrl'];
-  const csv = [headers, ...rows.map((r) => keys.map((k) => r[k]))]
+  // CSV with Extracted At timestamp
+  const headers = ['Title', 'Company', 'Location', 'Experience', 'Extracted At', 'Company Apply Link', 'Naukri Link'];
+  const keys    = ['title', 'company', 'location', 'experience', 'extractedAt', 'externalUrl', 'naukriUrl'];
+  const csv = [headers, ...rows.map((r) => keys.map((k) => r[k] || r['postedOn'] || ''))]
     .map((row) => row.map(csvCell).join(','))
     .join('\n');
   fs.writeFileSync(EXTERNAL_CSV, '\uFEFF' + csv);
@@ -113,15 +126,16 @@ function exportExternal(external) {
   th { background: #f5f5f5; position: sticky; top: 0; }
   tr:hover td { background: #fafafa; }
   a { color: #1a5fd0; } .na { color: #aaa; }
+  .badge { background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
 </style></head><body>
 <h1>Jobs that apply on company site</h1>
-<p class="meta">${rows.length} jobs · last updated ${esc(new Date().toLocaleString())}</p>
+<p class="meta">${rows.length} jobs · last updated ${esc(formatIST())}</p>
 <table>
-<tr><th>#</th><th>Title</th><th>Company</th><th>Location</th><th>Experience</th><th>Posted</th><th>Apply</th><th>Naukri</th></tr>
+<tr><th>#</th><th>Title</th><th>Company</th><th>Location</th><th>Experience</th><th>Extracted At</th><th>Apply Link</th><th>Naukri</th></tr>
 ${rows.map((r, i) => `<tr>
-  <td>${i + 1}</td><td>${esc(r.title)}</td><td>${esc(r.company)}</td>
-  <td>${esc(r.location)}</td><td>${esc(r.experience)}</td><td>${esc(r.postedOn)}</td>
-  <td>${link(r.externalUrl, 'Company site')}</td><td>${link(r.naukriUrl, 'Listing')}</td>
+  <td>${i + 1}</td><td><b>${esc(r.title)}</b></td><td>${esc(r.company)}</td>
+  <td>${esc(r.location)}</td><td>${esc(r.experience)}</td><td><span class="badge">${esc(r.extractedAt || r.foundOn || 'Recent')}</span></td>
+  <td>${link(r.externalUrl, 'Company site ↗')}</td><td>${link(r.naukriUrl, 'Listing ↗')}</td>
 </tr>`).join('\n')}
 </table></body></html>`;
   fs.writeFileSync(EXTERNAL_HTML, html);
@@ -139,35 +153,35 @@ async function getJobInfo(page) {
       return '';
     };
     return {
-      title:      text(['h1[class*="jd-header-title"]', 'h1']),
-      company:    text(['[class*="jd-header-comp-name"] a', '[class*="jd-header-comp-name"]']),
-      location:   text(['[class*="jhc__location"]', '[class*="location"] a']),
-      experience: text(['[class*="jhc__exp"]']),
+      title:      text(['h1[class*="jd-header-title"]', 'h1[class*="title"]', 'h1', '.jd-header-title']),
+      company:    text(['[class*="jd-header-comp-name"] a', '[class*="jd-header-comp-name"]', '.comp-name a', '.comp-name']),
+      location:   text(['[class*="jhc__location"]', '[class*="location"] a', '[class*="loc"]', '.loc-wrapper']),
+      experience: text(['[class*="jhc__exp"]', '[class*="exp"]', '.exp-wrapper']),
     };
   });
 }
 
 // ── Click "Apply on company site" and capture where it goes ──────────────────
 async function getExternalUrl(page, btn) {
-  // If it's a plain link, read the href without clicking
   const href = await btn.getAttribute('href').catch(() => null);
-  if (href && !href.startsWith('javascript')) return new URL(href, page.url()).href;
+  if (href && !href.startsWith('javascript') && !href.includes('naukri.com/apply')) {
+    return new URL(href, page.url()).href;
+  }
 
   const before = page.url();
   try {
     const [popup] = await Promise.all([
-      page.waitForEvent('popup', { timeout: 10000 }),
+      page.waitForEvent('popup', { timeout: 12000 }),
       btn.click(),
     ]);
     await popup.waitForURL((u) => u.href !== 'about:blank', { timeout: 10000 }).catch(() => {});
     await popup.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-    await sleep(2000); // let redirect chains settle
+    await sleep(2500); // let redirect chains settle
     const url = popup.url();
     await popup.close().catch(() => {});
-    return url === 'about:blank' ? '' : url;
+    return (url && url !== 'about:blank') ? url : '';
   } catch {
-    // No new tab: it may have navigated in the same tab
-    await sleep(2000);
+    await sleep(2500);
     const now = page.url();
     if (now !== before && !now.includes('naukri.com')) {
       await page.goBack().catch(() => {});
@@ -178,13 +192,16 @@ async function getExternalUrl(page, btn) {
 }
 
 // ── Extract posting date from a Naukri job URL ───────────────────────────────
-// Naukri embeds posting date as DDMMYY right before the 6-digit job ID at the end
-// e.g. job-listings-react-developer-infosys-140926012345 → 14 Sep 2026
 function getJobDate(url) {
   const match = url.match(/(\d{6})\d{6}$/);
-  if (!match) return new Date(0);
+  if (!match) return new Date(); // If date cannot be parsed, assume recent so it is not dropped
   const s = match[1];
-  return new Date(2000 + parseInt(s.slice(4, 6)), parseInt(s.slice(2, 4)) - 1, parseInt(s.slice(0, 2)));
+  try {
+    const d = new Date(2000 + parseInt(s.slice(4, 6)), parseInt(s.slice(2, 4)) - 1, parseInt(s.slice(0, 2)));
+    return isNaN(d.getTime()) ? new Date() : d;
+  } catch {
+    return new Date();
+  }
 }
 
 function isRecentJob(url, daysBack = 7) {
@@ -196,21 +213,32 @@ function isRecentJob(url, daysBack = 7) {
 
 // ── Collect job URLs from a search result page ────────────────────────────────
 async function collectJobLinks(page, url) {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await sleep(2500);
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
+  await sleep(2000);
+
+  // Scroll down to load all dynamic cards on the search results page
+  await page.evaluate(async () => {
+    for (let i = 0; i < 4; i++) {
+      window.scrollBy(0, 800);
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }).catch(() => {});
+
+  await sleep(1500);
 
   const links = await page.$$eval(
     [
       'a.title',
+      'a[class*="title"]',
       '.jobtuple-wrapper a[class*="title"]',
       '.cust-job-tuple a[class*="title"]',
       'article.jobTuple a.title',
       '.srp-jobtuple-wrapper a[title]',
+      'a[href*="/job-listings-"]',
     ].join(', '),
     (els) => [...new Set(els.map((el) => el.href).filter(Boolean))]
   );
 
-  // Only keep actual job listings posted in the last 7 days, newest first
   return links
     .filter((u) => u.includes('naukri.com/job-listings-'))
     .filter((u) => isRecentJob(u, 7))
@@ -219,41 +247,53 @@ async function collectJobLinks(page, url) {
 
 // ── Handle the apply modal / form that appears after clicking Apply ───────────
 async function fillApplyModal(page) {
-  await sleep(3000);
+  await sleep(2500);
 
-  // Notice period
-  const noticeSel = [
-    'select[id*="otice"]', 'select[name*="otice"]',
-    'input[placeholder*="otice"]',
+  // 1. Notice Period options (chips, radio buttons)
+  const noticeOptions = [
+    page.locator('button:has-text("Immediate"), [class*="chip"]:has-text("Immediate")').first(),
+    page.locator('label:has-text("Immediate"), label:has-text("15 Days"), label:has-text("30 Days")').first(),
+    page.locator('input[value*="Immediate"], input[value="0"]').first(),
   ];
+  for (const opt of noticeOptions) {
+    if (await opt.isVisible().catch(() => false)) {
+      await opt.click().catch(() => {});
+      break;
+    }
+  }
+
+  // Notice Period input or select
+  const noticeSel = ['select[id*="otice"]', 'select[name*="otice"]', 'input[placeholder*="otice"]'];
   for (const sel of noticeSel) {
     const el = page.locator(sel).first();
     if (await el.isVisible().catch(() => false)) {
-      const tag = await el.evaluate((n) => n.tagName.toLowerCase());
+      const tag = await el.evaluate((n) => n.tagName.toLowerCase()).catch(() => '');
       if (tag === 'select') {
-        await el.selectOption({ label: /immediate|0/i }).catch(() =>
-          el.selectOption({ index: 0 })
-        );
+        await el.selectOption({ label: /immediate|0|15|30/i }).catch(() => el.selectOption({ index: 0 }));
       } else {
-        await el.fill('0');
+        await el.fill('15').catch(() => {});
       }
       break;
     }
   }
 
-  // Current CTC (blank in .env means skip)
+  // 2. Current CTC & Expected CTC
   if (CV.currentCTC) {
-    const el = page.locator('input[placeholder*="urrent"]').first();
-    if (await el.isVisible().catch(() => false)) await el.fill(CV.currentCTC);
+    const el = page.locator('input[placeholder*="urrent"], input[name*="current"]').first();
+    if (await el.isVisible().catch(() => false)) await el.fill(CV.currentCTC).catch(() => {});
   }
-
-  // Expected CTC
   if (CV.expectedCTC) {
-    const el = page.locator('input[placeholder*="xpected"]').first();
-    if (await el.isVisible().catch(() => false)) await el.fill(CV.expectedCTC);
+    const el = page.locator('input[placeholder*="xpected"], input[name*="expected"]').first();
+    if (await el.isVisible().catch(() => false)) await el.fill(CV.expectedCTC).catch(() => {});
   }
 
-  // Try all common Naukri submit button variations
+  // 3. Yes buttons for work auth / relocation
+  const yesBtn = page.locator('button:has-text("Yes"), label:has-text("Yes")').first();
+  if (await yesBtn.isVisible().catch(() => false)) {
+    await yesBtn.click().catch(() => {});
+  }
+
+  // 4. Submit buttons
   const submitSelectors = [
     'button:has-text("Apply")',
     'button:has-text("Submit")',
@@ -262,23 +302,21 @@ async function fillApplyModal(page) {
     'button:has-text("Apply Now")',
     'button:has-text("Confirm")',
     'button:has-text("Send Application")',
+    'button:has-text("Save & Apply")',
     'button[type="submit"]',
     '.apply-button',
     '#apply-button',
-    'button.waves-effect',
   ];
 
   for (const sel of submitSelectors) {
     const btn = page.locator(sel).last();
     if (await btn.isVisible().catch(() => false)) {
-      await btn.click();
-      await sleep(2000);
+      await btn.click().catch(() => {});
+      await sleep(2500);
       return true;
     }
   }
 
-  // Screenshot for debugging when all selectors fail
-  await page.screenshot({ path: path.join(__dirname, `modal-failed-${Date.now()}.png`) }).catch(() => {});
   return false;
 }
 
@@ -288,56 +326,147 @@ async function applyToJob(page, jobUrl, applied, external) {
   if (isBlockedByUrl(jobUrl)) return 'blocked-company';
 
   try {
-    await page.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(1000);
+    await page.goto(jobUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
+    await sleep(1500);
 
     // Blocklist check using the company name on the page
     const info = await getJobInfo(page);
     if (isBlockedCompany(info.company)) return `blocked-company (${info.company})`;
 
-    // Company-site jobs: record details + redirect link instead of skipping
-    const extBtn = page.locator(
-      '#company-site-button, button:has-text("company site"), a:has-text("company site")'
-    ).first();
-    if (await extBtn.isVisible().catch(() => false)) {
+    // Check for "Apply on company site" / "company website"
+    const companySiteSelectors = [
+      '#company-site-button',
+      'button:has-text("company site")',
+      'button:has-text("company website")',
+      'button:has-text("Apply on Website")',
+      'button:has-text("Apply on company")',
+      'a:has-text("company site")',
+      'a:has-text("company website")',
+      'a:has-text("Apply on Website")',
+      'a:has-text("Apply on company")',
+      'button[class*="company-site"]',
+      'a[class*="company-site"]',
+      'button[id*="company-site"]',
+    ];
+
+    let extBtn = null;
+    for (const sel of companySiteSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible().catch(() => false)) {
+        extBtn = el;
+        break;
+      }
+    }
+
+    if (extBtn) {
+      log(`  [Company Site Job Detected]: ${info.title || 'Job'} @ ${info.company || 'Company'}`);
       const externalUrl = await getExternalUrl(page, extBtn);
+      const nowIST = formatIST();
       external[jobUrl] = {
-        ...info,
-        externalUrl,
+        title: info.title || 'Software Developer',
+        company: info.company || 'Company',
+        location: info.location || 'India',
+        experience: info.experience || 'Not Disclosed',
+        externalUrl: externalUrl || jobUrl,
         naukriUrl: jobUrl,
         postedOn: getJobDate(jobUrl).toISOString().slice(0, 10),
-        foundOn:  new Date().toISOString().slice(0, 10),
+        extractedAt: nowIST,
+        extractedAtTimestamp: Date.now(),
+        foundOn: new Date().toISOString().slice(0, 10),
       };
+      exportExternal(external);
       return 'external';
     }
 
-    // Detect the apply button
-    const btn = page.locator(
-      'button.apply-button, #apply-button, button:has-text("Apply"), a:has-text("Apply")'
-    ).first();
+    // Detect the standard apply button
+    const applySelectors = [
+      'button.apply-button',
+      '#apply-button',
+      'button:has-text("Apply")',
+      'a:has-text("Apply")',
+      'button[id*="apply"]',
+      'a[id*="apply"]',
+      '[class*="apply-button"]',
+    ];
 
-    if (!(await btn.isVisible().catch(() => false))) return 'no-button';
+    let btn = null;
+    for (const sel of applySelectors) {
+      const el = page.locator(sel).first();
+      if (await el.isVisible().catch(() => false)) {
+        btn = el;
+        break;
+      }
+    }
 
-    const txt = (await btn.textContent().catch(() => '')).toLowerCase();
-    if (txt.includes('applied'))      { applied.add(jobUrl); return 'already-applied'; }
-    if (txt.includes('company site')) return 'external';
-    if (txt.includes('external'))     return 'external';
+    if (!btn) return 'no-button';
+
+    const btnText = (await btn.textContent().catch(() => '')).toLowerCase();
+
+    // Check if button text indicates external apply
+    if (btnText.includes('company site') || btnText.includes('website') || btnText.includes('external')) {
+      log(`  [Company Site Job Detected via button text]: ${info.title} @ ${info.company}`);
+      const externalUrl = await getExternalUrl(page, btn);
+      const nowIST = formatIST();
+      external[jobUrl] = {
+        title: info.title || 'Software Developer',
+        company: info.company || 'Company',
+        location: info.location || 'India',
+        experience: info.experience || 'Not Disclosed',
+        externalUrl: externalUrl || jobUrl,
+        naukriUrl: jobUrl,
+        postedOn: getJobDate(jobUrl).toISOString().slice(0, 10),
+        extractedAt: nowIST,
+        extractedAtTimestamp: Date.now(),
+        foundOn: new Date().toISOString().slice(0, 10),
+      };
+      exportExternal(external);
+      return 'external';
+    }
+
+    if (btnText.includes('already') || btnText.includes('applied')) {
+      applied.add(jobUrl);
+      saveApplied(applied);
+      return 'already-applied';
+    }
 
     if (DRY_RUN) return 'dry-run';
 
+    log(`  Applying to: ${info.title || 'Job'} @ ${info.company || 'Company'}...`);
     await btn.click();
-    await sleep(3000);
+    await sleep(2500);
 
-    // Check if Naukri redirected to a success page (no modal needed)
-    const successText = await page.locator('text=Applied to, text=Application submitted, text=Successfully applied').first().isVisible().catch(() => false);
-    if (successText) { applied.add(jobUrl); return 'applied'; }
+    // Check if directly submitted without modal
+    const successSels = [
+      'text=Applied to',
+      'text=Application submitted',
+      'text=Successfully applied',
+      'text=already applied',
+      '[class*="apply-message"]',
+      '[class*="success-msg"]',
+    ];
+    for (const s of successSels) {
+      if (await page.locator(s).first().isVisible().catch(() => false)) {
+        applied.add(jobUrl);
+        saveApplied(applied);
+        return 'applied';
+      }
+    }
 
+    // Modal or questionnaire
     const ok = await fillApplyModal(page);
-    if (ok) { applied.add(jobUrl); return 'applied'; }
+    if (ok) {
+      applied.add(jobUrl);
+      saveApplied(applied);
+      return 'applied';
+    }
 
-    // Check success page one more time after modal interaction
-    const successAfter = await page.locator('text=Applied to').first().isVisible().catch(() => false);
-    if (successAfter) { applied.add(jobUrl); return 'applied'; }
+    for (const s of successSels) {
+      if (await page.locator(s).first().isVisible().catch(() => false)) {
+        applied.add(jobUrl);
+        saveApplied(applied);
+        return 'applied';
+      }
+    }
 
     return 'modal-failed';
   } catch (err) {

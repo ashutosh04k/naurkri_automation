@@ -15,6 +15,10 @@ const AUTO_REFRESH_MINS = parseInt(process.env.REFRESH_INTERVAL_MINS, 10) || 60;
 const AUTO_REFRESH_MS = AUTO_REFRESH_MINS * 60 * 1000;
 let nextCronTimestamp = Date.now() + AUTO_REFRESH_MS;
 
+const AUTO_APPLY_HOURS = parseInt(process.env.APPLY_INTERVAL_HOURS, 10) || 6;
+const AUTO_APPLY_MS = AUTO_APPLY_HOURS * 60 * 60 * 1000;
+let nextAutoApplyTimestamp = Date.now() + AUTO_APPLY_MS;
+
 const APPLIED_FILE = path.join(__dirname, 'applied-jobs.json');
 const EXTERNAL_FILE = path.join(__dirname, 'external-jobs.json');
 const EXTERNAL_CSV = path.join(__dirname, 'external-jobs.csv');
@@ -281,11 +285,17 @@ const server = http.createServer((req, res) => {
       currentTimeUTC: new Date().toISOString(),
       isCurrentlyAutomating: isBusy,
       currentTask: activeTask ? activeTask.name : null,
-      cronScheduler: {
+      hourlyProfileRefresh: {
         enabled: true,
         intervalMinutes: AUTO_REFRESH_MINS,
         nextScheduledRunIST: formatIST(nextCronTimestamp),
         nextScheduledRunUTC: new Date(nextCronTimestamp).toISOString(),
+      },
+      sixHourAutoApply: {
+        enabled: true,
+        intervalHours: AUTO_APPLY_HOURS,
+        nextScheduledRunIST: formatIST(nextAutoApplyTimestamp),
+        nextScheduledRunUTC: new Date(nextAutoApplyTimestamp).toISOString(),
       },
       lastRunResult: stats.lastRefreshText,
       appliedJobsCount: stats.appliedCount,
@@ -295,7 +305,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Trigger cron run on demand via simple GET (ideal for external webhook / cron-job.org)
+  // Trigger Hourly Refresh on demand via simple GET (ideal for cron-job.org)
   if ((pathname === '/api/cron/run' || pathname === '/refresh-cron') && req.method === 'GET') {
     if (activeTask) {
       res.writeHead(409, { 'Content-Type': 'application/json' });
@@ -306,6 +316,20 @@ const server = http.createServer((req, res) => {
     runScript('naukri-profile-refresh.js', [], 'Hourly Cron Refresh');
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, message: 'Hourly profile refresh triggered successfully.' }));
+    return;
+  }
+
+  // Trigger 6-Hour Auto-Apply on demand via simple GET (ideal for cron-job.org every 6 hours)
+  if ((pathname === '/api/cron/apply' || pathname === '/apply-cron') && req.method === 'GET') {
+    if (activeTask) {
+      res.writeHead(409, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `Task "${activeTask.name}" already in progress` }));
+      return;
+    }
+    nextAutoApplyTimestamp = Date.now() + AUTO_APPLY_MS;
+    runScript('naukri-auto-apply.js', [], '6-Hour Scheduled Auto Apply');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, message: '6-Hour Auto Apply triggered successfully.' }));
     return;
   }
 
@@ -483,6 +507,7 @@ server.listen(PORT, HOST, () => {
     if (!activeTask) {
       console.log('\n[Auto-Cron] Starting scheduled hourly profile refresh...');
       try {
+        nextCronTimestamp = Date.now() + AUTO_REFRESH_MS;
         runScript('naukri-profile-refresh.js', [], 'Hourly Profile Refresh');
       } catch (err) {
         console.error('[Auto-Cron] Scheduled run failed:', err.message);
@@ -491,4 +516,20 @@ server.listen(PORT, HOST, () => {
       console.log(`\n[Auto-Cron] Task "${activeTask.name}" currently active, skipping this cycle.`);
     }
   }, AUTO_REFRESH_MS);
+
+  // Recurring 6-hour Auto-Apply timer
+  console.log(`⏱️ 6-Hour Auto-Apply Cron active: Runs every ${AUTO_APPLY_HOURS} hours`);
+  setInterval(() => {
+    if (!activeTask) {
+      console.log('\n[Auto-Apply-Cron] Starting scheduled 6-hour auto apply...');
+      try {
+        nextAutoApplyTimestamp = Date.now() + AUTO_APPLY_MS;
+        runScript('naukri-auto-apply.js', [], '6-Hour Scheduled Auto Apply');
+      } catch (err) {
+        console.error('[Auto-Apply-Cron] Scheduled run failed:', err.message);
+      }
+    } else {
+      console.log(`\n[Auto-Apply-Cron] Task "${activeTask.name}" currently active, postponing auto-apply.`);
+    }
+  }, AUTO_APPLY_MS);
 });
