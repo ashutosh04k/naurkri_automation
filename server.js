@@ -257,14 +257,23 @@ const server = http.createServer((req, res) => {
 
   // Health check endpoint for Render monitoring
   if ((pathname === '/health' || pathname === '/api/health') && req.method === 'GET') {
+    const isBusy = Boolean(activeTask);
+    const stats = getStats();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ok',
       service: 'Naukri Automation Hub Dashboard & Hourly Cron',
-      isRunning: Boolean(activeTask),
+      serverStatus: isBusy ? `BUSY (executing: ${activeTask.name})` : 'HEALTHY & IDLE (waiting for next trigger)',
+      isCurrentlyAutomating: isBusy,
       currentTask: activeTask ? activeTask.name : null,
-      nextScheduledRun: new Date(nextCronTimestamp).toISOString(),
-      ...getStats(),
+      cronScheduler: {
+        enabled: true,
+        intervalMinutes: AUTO_REFRESH_MINS,
+        nextScheduledRunUTC: new Date(nextCronTimestamp).toISOString(),
+      },
+      lastRunResult: stats.lastRefreshText,
+      appliedJobsCount: stats.appliedCount,
+      externalJobsCount: stats.externalCount,
       uptimeSeconds: Math.floor(process.uptime()),
     }, null, 2));
     return;
