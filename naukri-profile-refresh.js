@@ -12,6 +12,7 @@
 const { chromium } = require('playwright-core');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const { CREDS, naukriProfileUrl } = require('./config'); // credentials + profile URL come from .env, never hard-coded
 
 const PROFILE_URL = naukriProfileUrl;
@@ -25,8 +26,27 @@ const LOGIN_MODE = process.argv[2] === 'login';
 const log = (msg) => {
   const line = `[${new Date().toLocaleString()}] ${msg}`;
   console.log(line);
-  fs.appendFileSync(LOG_FILE, line + '\n');
+  try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
 };
+
+function ensureSessionRestored() {
+  const sessionBase64 = process.env.NAUKRI_SESSION_BASE64;
+  if (!sessionBase64) return;
+
+  const cookiesPath = path.join(PROFILE_DIR, 'Default', 'Cookies');
+  if (fs.existsSync(cookiesPath)) return; // already restored
+
+  try {
+    fs.mkdirSync(PROFILE_DIR, { recursive: true });
+    const tmpTar = path.join(PROFILE_DIR, 'session.tar.gz');
+    fs.writeFileSync(tmpTar, Buffer.from(sessionBase64.trim(), 'base64'));
+    execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
+    if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
+    log('Restored Naukri Chrome session from NAUKRI_SESSION_BASE64.');
+  } catch (err) {
+    log(`Warning: Failed to unpack NAUKRI_SESSION_BASE64: ${err.message}`);
+  }
+}
 
 const onProfile = (url) => url.pathname.startsWith('/mnjuser');
 
@@ -89,16 +109,31 @@ async function googleLogin(ctx, page) {
   );
 }
 
-(async () => {
-  const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
-    channel: 'chrome',
-    headless: false, // naukri's Akamai bot-check blocks headless; off-screen headed instead
+async function refreshProfile() {
+  ensureSessionRestored();
+
+  const launchArgs = [
+    '--disable-blink-features=AutomationControlled',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    ...(LOGIN_MODE ? [] : ['--window-position=-32000,-32000']),
+  ];
+
+  const launchOptions = {
+    headless: process.env.HEADLESS === 'true',
     viewport: { width: 1280, height: 850 },
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      ...(LOGIN_MODE ? [] : ['--window-position=-32000,-32000']),
-    ],
-  });
+    args: launchArgs,
+  };
+
+  if (process.env.PLAYWRIGHT_CHANNEL) {
+    launchOptions.channel = process.env.PLAYWRIGHT_CHANNEL;
+  } else if (process.platform === 'darwin' || process.platform === 'win32') {
+    launchOptions.channel = 'chrome';
+  }
+
+  const ctx = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
   let page = ctx.pages()[0] || (await ctx.newPage());
 
   try {
@@ -136,15 +171,25 @@ async function googleLogin(ctx, page) {
       throw new Error(`save did not stick — server headline is "${saved.slice(0, 60)}", expected "${updated.slice(0, 60)}"`);
     }
 
-    log(`OK: headline ${current.endsWith('.') ? 'dot removed' : 'dot added'} (verified) → "${updated.slice(0, 60)}"`);
+    const actionMsg = `OK: headline ${current.endsWith('.') ? 'dot removed' : 'dot added'} (verified) → "${updated.slice(0, 60)}"`;
+    log(actionMsg);
+    return { success: true, message: actionMsg, headline: updated };
   } catch (err) {
     const pages = ctx.pages();
     for (let i = 0; i < pages.length; i++) {
       await pages[i].screenshot({ path: ERROR_SHOT.replace('.png', `-${i}.png`) }).catch(() => {});
     }
     log(`ERROR: ${err.message.split('\n')[0]} (screenshots: naukri-refresh-error-*.png)`);
-    process.exitCode = 1;
+    throw err;
   } finally {
     await ctx.close();
   }
-})();
+}
+
+if (require.main === module) {
+  refreshProfile().catch((err) => {
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { refreshProfile, log };

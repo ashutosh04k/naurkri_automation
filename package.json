@@ -4,6 +4,10 @@
   "description": "Keeps a Naukri profile fresh by toggling a trailing dot on the resume headline",
   "main": "naukri-profile-refresh.js",
   "scripts": {
+    "start": "node server.js",
+    "dashboard": "node server.js",
+    "worker": "node cron-worker.js",
+    "export-session": "node export-session.js",
     "refresh": "node naukri-profile-refresh.js",
     "login": "node naukri-profile-refresh.js login",
     "apply": "node naukri-auto-apply.js",

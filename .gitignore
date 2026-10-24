@@ -11,6 +11,8 @@ applied-jobs.json
 # saved browser sessions (contain logged-in cookies)
 .*-chrome-profile/
 .*-apply-profile/
+session-env.txt
+*.tar.gz
 
 # resume / personal docs
 *.pdf

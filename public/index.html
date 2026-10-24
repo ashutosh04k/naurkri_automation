@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Naukri Automation Hub | One-Click Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            },
+            surface: {
+              dark: '#0f172a',
+              card: '#1e293b',
+              border: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .terminal-scroll {
+      scroll-behavior: smooth;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .pulse-subtle { animation: pulse-subtle 2s infinite; }
+  </style>
+</head>
+<body class="bg-[#0b0f19] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-surface-border bg-surface-dark/95 backdrop-blur sticky top-0 z-50 px-4 lg:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+          Naukri Automation Hub
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">Auto-Pilot v1.0</span>
+        </h1>
+        <p class="text-xs text-slate-400">Profile Freshness & Intelligent Job Applier</p>
+      </div>
+    </div>
+
+    <!-- Live Status & Quick Actions -->
+    <div class="flex items-center gap-3">
+      <div id="statusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-surface-border text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></span>
+        <span id="statusText" class="font-medium text-slate-300">Ready</span>
+        <span id="taskTimer" class="text-indigo-400 font-mono text-[11px] hidden">00:00</span>
+      </div>
+
+      <button id="stopBtn" onclick="stopTask()" class="hidden px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-medium transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        Cancel Task
+      </button>
+
+      <a id="naukriProfileLink" href="https://www.naukri.com/mnjuser/profile" target="_blank" class="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition">
+        <span>Naukri Profile</span>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT GRID -->
+  <div class="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+    <!-- LEFT / MAIN COLUMN: Controls & Live Terminal (xl:col-span-7) -->
+    <main class="xl:col-span-7 flex flex-col space-y-6">
+
+      <!-- MASTER ONE-CLICK BANNER -->
+      <section class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-500/30 p-6 shadow-xl shadow-indigo-950/40">
+        <div class="absolute -right-8 -bottom-8 w-44 h-44 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="relative z-10">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <span class="text-xs font-semibold tracking-wider uppercase text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20">Master Action</span>
+              <h2 class="text-xl font-bold text-white mt-1.5">Full Automation Pipeline</h2>
+            </div>
+            <span class="text-xs text-slate-400 hidden sm:block">Refreshes Headline Dot + Applies to Newest 20 Jobs</span>
+          </div>
+
+          <p class="text-xs sm:text-sm text-slate-300 mb-5 leading-relaxed">
+            Execute the complete job hunt sequence in one click. First updates your resume headline dot to push your profile to the top of recruiter searches, then scours matching jobs across all target cities and applies safely.
+          </p>
+
+          <!-- The Big One-Click Button -->
+          <button id="masterRunBtn" onclick="triggerAction('run-all', 'One-Click Automate Everything')" class="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 p-[1px] focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed">
+            <div class="relative flex items-center justify-center gap-3 rounded-[11px] bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 font-semibold text-white shadow-lg transition-all group-hover:from-indigo-500 group-hover:to-purple-500">
+              <span id="masterBtnIcon" class="w-5 h-5 flex items-center justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              </span>
+              <span id="masterBtnText" class="text-base tracking-wide">⚡ One-Click Automate Everything</span>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <!-- INDIVIDUAL ACTIONS GRID -->
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        
+        <!-- Refresh Profile Only -->
+        <button onclick="triggerAction('refresh', 'Profile Refresh')" class="action-btn text-left p-4 rounded-xl bg-surface-card border border-surface-border hover:border-indigo-500/50 hover:bg-slate-800/80 transition group relative">
+          <div class="flex items-center justify-between mb-2">
+            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </div>
+            <span class="text-[10px] text-slate-500">Hourly</span>
+          </div>
+          <h3 class="text-xs font-bold text-white group-hover:text-indigo-300 transition">Refresh Profile</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Toggles resume headline dot to refresh recruiter timestamp.</p>
+        </button>
+
+        <!-- Auto Apply Live -->
+        <button onclick="triggerAction('apply', 'Auto Apply (Live)')" class="action-btn text-left p-4 rounded-xl bg-surface-card border border-surface-border hover:border-emerald-500/50 hover:bg-slate-800/80 transition group relative">
+          <div class="flex items-center justify-between mb-2">
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            </div>
+            <span class="text-[10px] text-emerald-400 font-semibold">Live Mode</span>
+          </div>
+          <h3 class="text-xs font-bold text-white group-hover:text-emerald-300 transition">Auto Apply (Live)</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Applies up to 20 fresh matching jobs with auto-filled responses.</p>
+        </button>
+
+        <!-- Dry Run Apply -->
+        <button onclick="triggerAction('apply-dry', 'Auto Apply (Dry Run)')" class="action-btn text-left p-4 rounded-xl bg-surface-card border border-surface-border hover:border-amber-500/50 hover:bg-slate-800/80 transition group relative">
+          <div class="flex items-center justify-between mb-2">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <span class="text-[10px] text-amber-400 font-semibold">Simulation</span>
+          </div>
+          <h3 class="text-xs font-bold text-white group-hover:text-amber-300 transition">Dry Run Test</h3>
+          <p class="text-[11px] text-slate-400 mt-1">Simulates the search and shows all matches without applying.</p>
+        </button>
+
+      </section>
+
+      <!-- LIVE TERMINAL CONSOLE -->
+      <section class="rounded-2xl bg-surface-card border border-surface-border flex flex-col flex-1 shadow-lg overflow-hidden min-h-[380px]">
+        <!-- Terminal Header -->
+        <div class="px-4 py-3 bg-[#0d1322] border-b border-surface-border flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="w-3 h-3 rounded-full bg-rose-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
+            <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+            <span class="ml-2 text-xs font-mono text-slate-400 flex items-center gap-1.5">
+              <span>runner@naukri-agent:~$</span>
+              <span id="activeProcessLabel" class="text-indigo-400 font-semibold">idle</span>
+            </span>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <label class="text-[11px] text-slate-400 flex items-center gap-1 cursor-pointer select-none">
+              <input type="checkbox" id="autoscrollCheck" checked class="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-0">
+              <span>Auto-scroll</span>
+            </label>
+            <button onclick="clearConsole()" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800/60 hover:bg-slate-800 border border-surface-border transition">
+              Clear
+            </button>
+            <button onclick="copyLogs()" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded bg-slate-800/60 hover:bg-slate-800 border border-surface-border transition">
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Output Area -->
+        <div id="terminalContainer" class="p-4 bg-[#080d1a] font-mono text-xs text-slate-300 flex-1 overflow-y-auto terminal-scroll max-h-[440px] leading-relaxed whitespace-pre-wrap select-text">
+          <div class="text-slate-500 italic select-none mb-2">[Ready] Terminal initialized. Click any action above to start automation...</div>
+        </div>
+      </section>
+
+      <!-- STATS SUMMARY CARDS -->
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-3.5 rounded-xl bg-surface-card/60 border border-surface-border">
+          <p class="text-[11px] text-slate-400">Total Applied</p>
+          <p id="statAppliedCount" class="text-xl font-bold text-white mt-0.5">--</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-surface-card/60 border border-surface-border">
+          <p class="text-[11px] text-slate-400">External Captured</p>
+          <p id="statExternalCount" class="text-xl font-bold text-indigo-400 mt-0.5">--</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-surface-card/60 border border-surface-border col-span-2">
+          <p class="text-[11px] text-slate-400">Last Profile Refresh</p>
+          <p id="statLastRefresh" class="text-xs font-medium text-slate-300 mt-1 truncate">Loading...</p>
+        </div>
+      </section>
+
+    </main>
+
+
+    <!-- RIGHT COLUMN: EXTRACTED DATA SIDEBAR (xl:col-span-5) -->
+    <aside class="xl:col-span-5 flex flex-col space-y-4">
+
+      <div class="bg-surface-card border border-surface-border rounded-2xl flex flex-col flex-1 shadow-xl overflow-hidden">
+        
+        <!-- Sidebar Navigation Tabs -->
+        <div class="p-3 bg-surface-dark border-b border-surface-border flex items-center justify-between">
+          <div class="flex items-center space-x-1 bg-slate-900/90 p-1 rounded-xl border border-surface-border">
+            <button id="tabBtnExternal" onclick="switchSidebarTab('external')" class="tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5">
+              <span>External Jobs</span>
+              <span id="badgeExternalCount" class="px-1.5 py-0.2 bg-white/20 text-white text-[10px] rounded-full">0</span>
+            </button>
+            <button id="tabBtnApplied" onclick="switchSidebarTab('applied')" class="tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5">
+              <span>Applied</span>
+              <span id="badgeAppliedCount" class="px-1.5 py-0.2 bg-slate-800 text-slate-300 text-[10px] rounded-full">0</span>
+            </button>
+            <button id="tabBtnProfile" onclick="switchSidebarTab('profile')" class="tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition">
+              Profile Info
+            </button>
+          </div>
+
+          <!-- Quick export buttons -->
+          <div id="externalExportTools" class="flex items-center space-x-1.5">
+            <a href="/api/export/csv" class="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-surface-border flex items-center gap-1 transition" title="Export CSV for Excel">
+              <svg class="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span>CSV</span>
+            </a>
+            <a href="/external-jobs.html" target="_blank" class="px-2.5 py-1 text-[11px] rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-surface-border flex items-center gap-1 transition" title="Open Full HTML Table">
+              <span>HTML</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Search Bar (for jobs lists) -->
+        <div id="sidebarSearchWrapper" class="px-4 py-2.5 border-b border-surface-border/60 bg-slate-900/40">
+          <div class="relative">
+            <input type="text" id="sidebarSearchInput" oninput="filterSidebarList()" placeholder="Filter by title, company, or location..." class="w-full bg-[#0a0f1d] border border-surface-border rounded-xl px-3.5 py-2 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition">
+            <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT: 1. EXTERNAL JOBS -->
+        <div id="tabContentExternal" class="flex-1 overflow-y-auto p-4 space-y-3 max-h-[calc(100vh-280px)]">
+          <div class="text-center py-8 text-slate-500 text-xs">Loading extracted jobs...</div>
+        </div>
+
+        <!-- TAB CONTENT: 2. APPLIED JOBS -->
+        <div id="tabContentApplied" class="hidden flex-1 overflow-y-auto p-4 space-y-2.5 max-h-[calc(100vh-280px)]">
+          <div class="text-center py-8 text-slate-500 text-xs">Loading applied jobs...</div>
+        </div>
+
+        <!-- TAB CONTENT: 3. PROFILE DETAILS -->
+        <div id="tabContentProfile" class="hidden flex-1 overflow-y-auto p-5 space-y-4 max-h-[calc(100vh-280px)]">
+          <div class="space-y-3 text-xs">
+            <div class="border-b border-surface-border pb-3">
+              <span class="text-slate-500 block text-[10px] uppercase tracking-wider font-semibold">Candidate</span>
+              <p id="profName" class="text-sm font-bold text-white mt-0.5">--</p>
+              <p id="profRole" class="text-slate-300">--</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 border-b border-surface-border pb-3">
+              <div>
+                <span class="text-slate-500 block text-[10px] uppercase font-semibold">Location</span>
+                <p id="profLocation" class="text-slate-300 font-medium mt-0.5">--</p>
+              </div>
+              <div>
+                <span class="text-slate-500 block text-[10px] uppercase font-semibold">Experience</span>
+                <p id="profExp" class="text-slate-300 font-medium mt-0.5">--</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 border-b border-surface-border pb-3">
+              <div>
+                <span class="text-slate-500 block text-[10px] uppercase font-semibold">Notice Period</span>
+                <p id="profNotice" class="text-emerald-400 font-medium mt-0.5">--</p>
+              </div>
+              <div>
+                <span class="text-slate-500 block text-[10px] uppercase font-semibold">Expected CTC</span>
+                <p id="profExpected" class="text-slate-300 font-medium mt-0.5">--</p>
+              </div>
+            </div>
+            <div>
+              <span class="text-slate-500 block text-[10px] uppercase font-semibold">Key Skills</span>
+              <div id="profSkillsPills" class="flex flex-wrap gap-1.5 mt-1.5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Footer Status -->
+        <div class="p-3 bg-surface-dark border-t border-surface-border text-center">
+          <p class="text-[11px] text-slate-500">Live data synchronizes automatically after each task execution.</p>
+        </div>
+
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- JAVASCRIPT APP LOGIC -->
+  <script>
+    let globalData = {
+      profile: {},
+      stats: {},
+      appliedList: [],
+      externalList: [],
+    };
+    let currentTab = 'external';
+    let isTaskRunning = false;
+    let timerInterval = null;
+    let taskStartTime = null;
+
+    // Initialize SSE (Server-Sent Events)
+    function setupSSE() {
+      const evtSource = new EventSource('/api/logs/stream');
+
+      evtSource.addEventListener('status', (e) => {
+        const stats = JSON.parse(e.data);
+        updateStatusUI(stats);
+      });
+
+      evtSource.addEventListener('log', (e) => {
+        const payload = JSON.parse(e.data);
+        appendTerminalLine(payload.line, payload.source);
+      });
+
+      evtSource.addEventListener('data-refresh', (e) => {
+        const data = JSON.parse(e.data);
+        renderAllData(data);
+      });
+
+      evtSource.onerror = () => {
+        // SSE auto-reconnects
+      };
+    }
+
+    // Terminal Logging
+    function appendTerminalLine(text, source) {
+      const container = document.getElementById('terminalContainer');
+      const span = document.createElement('span');
+      
+      // Highlight color rules
+      if (text.includes('APPLIED') || text.includes('SAVED EXTERNAL') || text.includes('OK:')) {
+        span.className = 'text-emerald-400 font-semibold';
+      } else if (text.includes('ERROR') || text.includes('FAIL') || text.includes('blocked-company')) {
+        span.className = 'text-rose-400';
+      } else if (text.includes('DRY-RUN') || text.includes('SKIP')) {
+        span.className = 'text-amber-300';
+      } else if (text.includes('[START]') || text.includes('[FINISH]')) {
+        span.className = 'text-indigo-300 font-bold';
+      } else {
+        span.className = source === 'stderr' ? 'text-rose-300' : 'text-slate-300';
+      }
+
+      span.textContent = text;
+      container.appendChild(span);
+
+      if (document.getElementById('autoscrollCheck').checked) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function clearConsole() {
+      document.getElementById('terminalContainer').innerHTML = '';
+    }
+
+    function copyLogs() {
+      const text = document.getElementById('terminalContainer').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Terminal logs copied to clipboard!');
+      });
+    }
+
+    // Update Status Pill & Control State
+    function updateStatusUI(stats) {
+      isTaskRunning = stats.isRunning;
+      const statusBadge = document.getElementById('statusBadge');
+      const statusText = document.getElementById('statusText');
+      const stopBtn = document.getElementById('stopBtn');
+      const masterRunBtn = document.getElementById('masterRunBtn');
+      const masterBtnText = document.getElementById('masterBtnText');
+      const masterBtnIcon = document.getElementById('masterBtnIcon');
+      const activeProcessLabel = document.getElementById('activeProcessLabel');
+      const actionBtns = document.querySelectorAll('.action-btn');
+
+      if (stats.appliedCount != null) {
+        document.getElementById('statAppliedCount').textContent = stats.appliedCount;
+        document.getElementById('badgeAppliedCount').textContent = stats.appliedCount;
+      }
+      if (stats.externalCount != null) {
+        document.getElementById('statExternalCount').textContent = stats.externalCount;
+        document.getElementById('badgeExternalCount').textContent = stats.externalCount;
+      }
+      if (stats.lastRefreshText) {
+        document.getElementById('statLastRefresh').textContent = stats.lastRefreshText;
+      }
+
+      if (isTaskRunning) {
+        statusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-xs';
+        statusBadge.querySelector('span').className = 'w-2 h-2 rounded-full bg-indigo-400 animate-ping';
+        statusText.textContent = `Running: ${stats.currentTask}`;
+        stopBtn.classList.remove('hidden');
+        activeProcessLabel.textContent = stats.currentTask;
+
+        masterRunBtn.disabled = true;
+        masterBtnText.textContent = `Automation in Progress (${stats.currentTask})...`;
+        masterBtnIcon.innerHTML = `<svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+        actionBtns.forEach(btn => btn.disabled = true);
+
+        if (stats.taskStartTime && !timerInterval) {
+          taskStartTime = new Date(stats.taskStartTime).getTime();
+          document.getElementById('taskTimer').classList.remove('hidden');
+          timerInterval = setInterval(updateTimer, 1000);
+        }
+      } else {
+        statusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-surface-border text-xs';
+        statusBadge.querySelector('span').className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50';
+        statusText.textContent = 'Ready';
+        stopBtn.classList.add('hidden');
+        document.getElementById('taskTimer').classList.add('hidden');
+        activeProcessLabel.textContent = 'idle';
+
+        masterRunBtn.disabled = false;
+        masterBtnText.textContent = '⚡ One-Click Automate Everything';
+        masterBtnIcon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>`;
+        actionBtns.forEach(btn => btn.disabled = false);
+
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+    }
+
+    function updateTimer() {
+      if (!taskStartTime) return;
+      const elapsedSec = Math.floor((Date.now() - taskStartTime) / 1000);
+      const m = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      const s = String(elapsedSec % 60).padStart(2, '0');
+      document.getElementById('taskTimer').textContent = `${m}:${s}`;
+    }
+
+    // Trigger Server Actions
+    async function triggerAction(actionKey, label) {
+      if (isTaskRunning) return;
+      try {
+        const res = await fetch(`/api/action/${actionKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Failed to start task');
+        }
+      } catch (err) {
+        alert('Network error connecting to dashboard server');
+      }
+    }
+
+    async function stopTask() {
+      if (!confirm('Are you sure you want to stop the current running task?')) return;
+      try {
+        await fetch('/api/action/stop', { method: 'POST' });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Fetch Full Data
+    async function loadData() {
+      try {
+        const res = await fetch('/api/data');
+        const data = await res.json();
+        renderAllData(data);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      }
+    }
+
+    function renderAllData(data) {
+      globalData = data;
+      updateStatusUI(data.stats);
+      renderProfile(data.profile);
+      renderExternalJobs(data.externalList);
+      renderAppliedJobs(data.appliedList);
+    }
+
+    function renderProfile(p) {
+      if (!p) return;
+      document.getElementById('profName').textContent = p.name || 'Candidate';
+      document.getElementById('profRole').textContent = p.currentRole || 'Software Professional';
+      document.getElementById('profLocation').textContent = p.location || '--';
+      document.getElementById('profExp').textContent = p.yearsOfExperience || '--';
+      document.getElementById('profNotice').textContent = p.noticePeriod || '--';
+      document.getElementById('profExpected').textContent = p.expectedSalary || '--';
+
+      if (p.naukriProfileUrl) {
+        document.getElementById('naukriProfileLink').href = p.naukriProfileUrl;
+      }
+
+      const skillsContainer = document.getElementById('profSkillsPills');
+      skillsContainer.innerHTML = '';
+      const skills = (p.skills || '').split(',').map(s => s.trim()).filter(Boolean);
+      skills.forEach(skill => {
+        const pill = document.createElement('span');
+        pill.className = 'px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-surface-border text-[11px] font-medium';
+        pill.textContent = skill;
+        skillsContainer.appendChild(pill);
+      });
+    }
+
+    function renderExternalJobs(list) {
+      const container = document.getElementById('tabContentExternal');
+      if (!list || list.length === 0) {
+        container.innerHTML = `<div class="text-center py-12 text-slate-500 text-xs">No external jobs captured yet. Run Auto Apply to discover company-site postings!</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(item => `
+        <div class="job-card p-3.5 rounded-xl bg-slate-900/60 border border-surface-border hover:border-indigo-500/40 transition flex flex-col justify-between space-y-2.5">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <h4 class="text-xs font-bold text-white leading-snug">${escapeHtml(item.title || 'Job Listing')}</h4>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 whitespace-nowrap">${escapeHtml(item.postedOn || 'Recent')}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-slate-400">
+              <span class="text-indigo-400 font-medium">${escapeHtml(item.company || 'Company')}</span>
+              <span>•</span>
+              <span class="truncate max-w-[180px]">${escapeHtml(item.location || 'Location')}</span>
+              <span>•</span>
+              <span>${escapeHtml(item.experience || '')}</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+            <a href="${escapeHtml(item.naukriUrl)}" target="_blank" class="text-[11px] text-slate-400 hover:text-slate-200 transition">View on Naukri</a>
+            ${item.externalUrl ? `
+              <a href="${escapeHtml(item.externalUrl)}" target="_blank" class="px-2.5 py-1 rounded-lg bg-indigo-600/90 hover:bg-indigo-600 text-white text-[11px] font-semibold transition flex items-center gap-1">
+                <span>Apply on Company Site</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            ` : `<span class="text-[10px] text-slate-500 italic">Direct link not captured</span>`}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderAppliedJobs(list) {
+      const container = document.getElementById('tabContentApplied');
+      if (!list || list.length === 0) {
+        container.innerHTML = `<div class="text-center py-12 text-slate-500 text-xs">No jobs recorded in applied-jobs.json yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map((item, idx) => `
+        <div class="job-card p-3 rounded-xl bg-slate-900/60 border border-surface-border hover:border-emerald-500/40 transition flex items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono text-emerald-400 font-semibold">#${idx + 1}</span>
+              <p class="text-xs font-semibold text-slate-200 truncate capitalize">${escapeHtml(item.rawSlug || item.title)}</p>
+            </div>
+          </div>
+          <a href="${escapeHtml(item.url)}" target="_blank" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition" title="Open Naukri Job">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+        </div>
+      `).join('');
+    }
+
+    // Sidebar Tab Switching
+    function switchSidebarTab(tab) {
+      currentTab = tab;
+      const btnExt = document.getElementById('tabBtnExternal');
+      const btnApp = document.getElementById('tabBtnApplied');
+      const btnProf = document.getElementById('tabBtnProfile');
+      const searchWrapper = document.getElementById('sidebarSearchWrapper');
+      const exportTools = document.getElementById('externalExportTools');
+
+      const contentExt = document.getElementById('tabContentExternal');
+      const contentApp = document.getElementById('tabContentApplied');
+      const contentProf = document.getElementById('tabContentProfile');
+
+      [btnExt, btnApp, btnProf].forEach(b => {
+        b.className = 'tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 transition';
+      });
+      [contentExt, contentApp, contentProf].forEach(c => c.classList.add('hidden'));
+
+      if (tab === 'external') {
+        btnExt.className = 'tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5';
+        contentExt.classList.remove('hidden');
+        searchWrapper.classList.remove('hidden');
+        exportTools.classList.remove('hidden');
+      } else if (tab === 'applied') {
+        btnApp.className = 'tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5';
+        contentApp.classList.remove('hidden');
+        searchWrapper.classList.remove('hidden');
+        exportTools.classList.add('hidden');
+      } else {
+        btnProf.className = 'tab-btn px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition';
+        contentProf.classList.remove('hidden');
+        searchWrapper.classList.add('hidden');
+        exportTools.classList.add('hidden');
+      }
+
+      filterSidebarList();
+    }
+
+    function filterSidebarList() {
+      const q = (document.getElementById('sidebarSearchInput').value || '').toLowerCase().trim();
+      if (currentTab === 'external') {
+        const filtered = globalData.externalList.filter(j => 
+          (j.title || '').toLowerCase().includes(q) ||
+          (j.company || '').toLowerCase().includes(q) ||
+          (j.location || '').toLowerCase().includes(q)
+        );
+        renderExternalJobs(filtered);
+      } else if (currentTab === 'applied') {
+        const filtered = globalData.appliedList.filter(j =>
+          (j.rawSlug || '').toLowerCase().includes(q) ||
+          (j.title || '').toLowerCase().includes(q)
+        );
+        renderAppliedJobs(filtered);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    // On Load
+    window.addEventListener('DOMContentLoaded', () => {
+      setupSSE();
+      loadData();
+    });
+  </script>
+</body>
+</html>

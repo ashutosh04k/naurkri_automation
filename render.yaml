@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: naukri-hourly-refresher
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: REFRESH_INTERVAL_MINS
+        value: "60"
+      - key: NAUKRI_PROFILE_URL
+        value: https://www.naukri.com/mnjuser/profile
+      - key: GOOGLE_EMAIL
+        sync: false
+      - key: GOOGLE_PASSWORD
+        sync: false
+      - key: NAUKRI_SESSION_BASE64
+        sync: false
