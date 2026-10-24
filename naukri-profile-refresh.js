@@ -29,70 +29,58 @@ const log = (msg) => {
   try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch {}
 };
 
-function ensureSessionRestored() {
-  const cookiesPath = path.join(PROFILE_DIR, 'Default', 'Cookies');
-  if (fs.existsSync(cookiesPath)) {
-    log('Using existing saved Chrome profile session.');
-    return;
-  }
-
-  log('Checking for session secret files or archives...');
-  // 1. Check Render Secret Files (avoids ARG_MAX shell limits)
-  const secretArchives = [
-    '/etc/secrets/session.tar.gz',
-    '/etc/secrets/naukri-session.tar.gz',
-    path.join(__dirname, 'session.tar.gz'),
-    path.join(__dirname, 'naukri-session.tar.gz'),
-  ];
-  for (const archivePath of secretArchives) {
-    if (fs.existsSync(archivePath)) {
-      try {
-        fs.mkdirSync(PROFILE_DIR, { recursive: true });
-        execSync(`tar -xzf "${archivePath}" -C "${PROFILE_DIR}"`);
-        log(`Restored Naukri Chrome session from secret file: ${archivePath}`);
-        return;
-      } catch (err) {
-        log(`Warning: Failed to unpack ${archivePath}: ${err.message}`);
-      }
-    }
-  }
-
-  // 2. Check Render Secret text files
-  const secretTexts = [
+async function injectCookiesIfAvailable(ctx) {
+  const secretPaths = [
     '/etc/secrets/session-env.txt',
+    '/etc/secrets/storage-state.json',
     path.join(__dirname, 'session-env.txt'),
+    path.join(__dirname, 'storage-state.json'),
   ];
-  for (const textPath of secretTexts) {
-    if (fs.existsSync(textPath)) {
+
+  for (const p of secretPaths) {
+    if (fs.existsSync(p)) {
       try {
-        fs.mkdirSync(PROFILE_DIR, { recursive: true });
-        const b64 = fs.readFileSync(textPath, 'utf8').trim();
-        const tmpTar = path.join(PROFILE_DIR, 'tmp-session.tar.gz');
-        fs.writeFileSync(tmpTar, Buffer.from(b64, 'base64'));
-        execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
-        if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
-        log(`Restored Naukri Chrome session from secret file: ${textPath}`);
-        return;
+        const raw = fs.readFileSync(p, 'utf8').trim();
+        let parsed = null;
+        if (raw.startsWith('{') || raw.startsWith('[')) {
+          parsed = JSON.parse(raw);
+        } else {
+          try {
+            const decoded = Buffer.from(raw, 'base64').toString('utf8');
+            parsed = JSON.parse(decoded);
+          } catch {}
+        }
+
+        if (parsed) {
+          const cookies = Array.isArray(parsed) ? parsed : (parsed.cookies || []);
+          if (cookies.length > 0) {
+            await ctx.addCookies(cookies);
+            log(`Injected ${cookies.length} session cookies from ${p}`);
+            return true;
+          }
+        }
       } catch (err) {
-        log(`Warning: Failed to unpack ${textPath}: ${err.message}`);
+        log(`Warning reading cookies from ${p}: ${err.message}`);
       }
     }
   }
 
-  // 3. Fallback to environment variable if present
-  const sessionBase64 = process.env.NAUKRI_SESSION_BASE64;
-  if (sessionBase64) {
+  const envB64 = process.env.NAUKRI_SESSION_BASE64;
+  if (envB64) {
     try {
-      fs.mkdirSync(PROFILE_DIR, { recursive: true });
-      const tmpTar = path.join(PROFILE_DIR, 'session.tar.gz');
-      fs.writeFileSync(tmpTar, Buffer.from(sessionBase64.trim(), 'base64'));
-      execSync(`tar -xzf "${tmpTar}" -C "${PROFILE_DIR}"`);
-      if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar);
-      log('Restored Naukri Chrome session from NAUKRI_SESSION_BASE64.');
+      const decoded = Buffer.from(envB64.trim(), 'base64').toString('utf8');
+      const parsed = JSON.parse(decoded);
+      const cookies = Array.isArray(parsed) ? parsed : (parsed.cookies || []);
+      if (cookies.length > 0) {
+        await ctx.addCookies(cookies);
+        log(`Injected ${cookies.length} session cookies from NAUKRI_SESSION_BASE64 env`);
+        return true;
+      }
     } catch (err) {
-      log(`Warning: Failed to unpack NAUKRI_SESSION_BASE64: ${err.message}`);
+      log(`Warning reading cookies from NAUKRI_SESSION_BASE64: ${err.message}`);
     }
   }
+  return false;
 }
 
 const onProfile = (url) => url.pathname.startsWith('/mnjuser');
@@ -158,7 +146,6 @@ async function googleLogin(ctx, page) {
 
 async function refreshProfile() {
   log('Starting profile refresh procedure...');
-  ensureSessionRestored();
 
   const launchArgs = [
     '--disable-blink-features=AutomationControlled',
@@ -186,6 +173,9 @@ async function refreshProfile() {
   try {
     log('Launching browser persistent context...');
     ctx = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
+
+    await injectCookiesIfAvailable(ctx);
+
     let page = ctx.pages()[0] || (await ctx.newPage());
 
     log(`Navigating to profile: ${PROFILE_URL}...`);
@@ -249,4 +239,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { refreshProfile, log };
+module.exports = { refreshProfile, injectCookiesIfAvailable, log };

@@ -355,15 +355,31 @@ async function applyToJob(page, jobUrl, applied, external) {
   let count = 0;
   let externalCount = 0;
 
-  const ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
-    channel: 'chrome',
-    headless: false,
+  const { injectCookiesIfAvailable } = require('./naukri-profile-refresh');
+
+  const launchArgs = [
+    '--disable-blink-features=AutomationControlled',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--window-position=-32000,-32000',
+  ];
+
+  const launchOptions = {
+    headless: process.env.HEADLESS === 'true',
     viewport: { width: 1280, height: 850 },
-    args: [
-      '--disable-blink-features=AutomationControlled',
-      '--window-position=-32000,-32000',
-    ],
-  });
+    args: launchArgs,
+  };
+
+  if (process.env.PLAYWRIGHT_CHANNEL) {
+    launchOptions.channel = process.env.PLAYWRIGHT_CHANNEL;
+  } else if (process.platform === 'darwin' || process.platform === 'win32') {
+    launchOptions.channel = 'chrome';
+  }
+
+  const ctx = await chromium.launchPersistentContext(PROFILE_DIR, launchOptions);
+  await injectCookiesIfAvailable(ctx);
 
   const page = ctx.pages()[0] || (await ctx.newPage());
   log(`=== Auto-apply started${DRY_RUN ? ' (DRY RUN)' : ''} — max ${MAX_PER_RUN} applications ===`);

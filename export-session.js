@@ -1,63 +1,59 @@
 /**
- * Export Naukri Chrome session into a compact base64 string
- * for deploying to cloud environments like Render.
+ * Export clean, decrypted Naukri session cookies into a portable JSON/base64 format.
+ * Works seamlessly across macOS, Linux, Docker, and Render without Keychain encryption issues.
  */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { chromium } = require('playwright-core');
 
 const PROFILE_DIR = path.join(__dirname, '.naukri-chrome-profile');
 const OUTPUT_TXT = path.join(__dirname, 'session-env.txt');
-const ARCHIVE_FILE = path.join(__dirname, 'naukri-session.tar.gz');
+const OUTPUT_JSON = path.join(__dirname, 'storage-state.json');
 
-if (!fs.existsSync(PROFILE_DIR)) {
-  console.error('Error: .naukri-chrome-profile directory does not exist.');
-  console.error('Please run "npm run login" first to sign in locally.');
-  process.exit(1);
-}
+(async () => {
+  console.log('Reading session cookies from Chrome profile...');
 
-console.log('Packaging session files from .naukri-chrome-profile...');
+  let ctx = null;
+  try {
+    ctx = await chromium.launchPersistentContext(PROFILE_DIR, {
+      channel: 'chrome',
+      headless: false,
+      args: ['--window-position=-32000,-32000', '--disable-blink-features=AutomationControlled'],
+    });
 
-try {
-  // Package essential auth files: Cookies, Local State, Local Storage, Network Persistent State
-  const defaultDir = path.join(PROFILE_DIR, 'Default');
-  const includePaths = [];
+    const cookies = await ctx.cookies();
+    const naukriCookies = cookies.filter((c) => c.domain.includes('naukri.com'));
 
-  if (fs.existsSync(path.join(PROFILE_DIR, 'Local State'))) {
-    includePaths.push('Local State');
+    if (naukriCookies.length === 0) {
+      console.error('\n❌ No Naukri cookies found in .naukri-chrome-profile.');
+      console.error('Please run "npm run login" first to sign into Naukri.\n');
+      process.exit(1);
+    }
+
+    const payload = {
+      timestamp: new Date().toISOString(),
+      cookies: naukriCookies,
+    };
+
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const base64Str = Buffer.from(JSON.stringify(payload)).toString('base64');
+
+    fs.writeFileSync(OUTPUT_JSON, jsonStr);
+    fs.writeFileSync(OUTPUT_TXT, base64Str);
+
+    console.log('\n============================================================');
+    console.log('✅ Session cookies exported successfully!');
+    console.log(`🍪 Found ${naukriCookies.length} Naukri authentication cookies.`);
+    console.log(`📁 1. Plain JSON:  ${OUTPUT_JSON} (${Math.round(jsonStr.length / 1024)} KB)`);
+    console.log(`📁 2. Base64 Text: ${OUTPUT_TXT} (${Math.round(base64Str.length / 1024)} KB)`);
+    console.log('\n👉 Setup on Render:');
+    console.log('   Go to your Service -> Environment -> Secret Files -> "session-env.txt"');
+    console.log('   Paste the new content of session-env.txt and click Save Changes.');
+    console.log('============================================================\n');
+  } catch (err) {
+    console.error('Export failed:', err.message);
+    process.exit(1);
+  } finally {
+    if (ctx) await ctx.close();
   }
-  if (fs.existsSync(path.join(defaultDir, 'Cookies'))) {
-    includePaths.push('Default/Cookies');
-  }
-  if (fs.existsSync(path.join(defaultDir, 'Network Persistent State'))) {
-    includePaths.push('Default/Network Persistent State');
-  }
-  if (fs.existsSync(path.join(defaultDir, 'Local Storage'))) {
-    includePaths.push('Default/Local Storage');
-  }
-  if (fs.existsSync(path.join(defaultDir, 'Session Storage'))) {
-    includePaths.push('Default/Session Storage');
-  }
-
-  // Create tar.gz with properly quoted file paths
-  const quotedPaths = includePaths.map(p => `"${p}"`).join(' ');
-  const cmd = `tar -czf "${ARCHIVE_FILE}" -C "${PROFILE_DIR}" ${quotedPaths}`;
-  execSync(cmd);
-
-  const archiveBuffer = fs.readFileSync(ARCHIVE_FILE);
-  const base64Str = archiveBuffer.toString('base64');
-  fs.writeFileSync(OUTPUT_TXT, base64Str);
-
-  console.log('\n============================================================');
-  console.log('✅ Session exported successfully!');
-  console.log(`📁 1. Binary Archive: ${ARCHIVE_FILE} (${Math.round(archiveBuffer.length / 1024)} KB)`);
-  console.log(`📁 2. Base64 Text:    ${OUTPUT_TXT} (${Math.round(base64Str.length / 1024)} KB)`);
-  console.log('\n👉 Recommended for Render (prevents "argument list too long" error):');
-  console.log('   Go to Service Settings -> Environment -> Secret Files -> "Add Secret File"');
-  console.log('   - File Name: session.tar.gz');
-  console.log('   - File Content: Upload or paste the contents of naukri-session.tar.gz');
-  console.log('============================================================\n');
-} catch (err) {
-  console.error('Failed to export session:', err.message);
-  process.exit(1);
-}
+})();
