@@ -3,9 +3,10 @@ FROM mcr.microsoft.com/playwright:v1.49.0-noble
 
 WORKDIR /app
 
-# Install Xvfb for virtual display (enables headed Chrome without an attached monitor)
+# Install Xvfb and xauth for virtual display
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
+    xauth \
     tar \
     && rm -rf /var/lib/apt/lists/*
 
@@ -17,13 +18,14 @@ RUN npm install
 
 # Copy application source code
 COPY . .
+RUN chmod +x entrypoint.sh
 
 # Environment variables
 ENV PORT=3000
 ENV HEADLESS=false
-ENV PLAYWRIGHT_BROWSERS_PATH=0
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 EXPOSE 3000
 
-# Start with virtual display to bypass Akamai headless bot-checks
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1280x850x24", "node", "cron-worker.js"]
+# Start via entrypoint script
+CMD ["./entrypoint.sh"]

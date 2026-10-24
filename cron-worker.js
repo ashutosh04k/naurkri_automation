@@ -102,9 +102,14 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: 'Not found' }));
 });
 
+server.on('error', (err) => {
+  console.error('[HTTP Server Error]:', err.message);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n============================================================`);
   console.log(`🤖 Naukri Hourly Cron Worker is active!`);
+  console.log(`👉 Listening on: 0.0.0.0:${PORT}`);
   console.log(`👉 Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`👉 Trigger manual refresh: http://0.0.0.0:${PORT}/refresh`);
   console.log(`👉 Scheduled interval: Every ${Math.round(REFRESH_INTERVAL_MS / 60000)} minutes`);
