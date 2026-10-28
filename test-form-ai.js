@@ -138,6 +138,33 @@ async function runTests() {
         inputType: 'select'
       },
       expected: 'Bachelor of Technology (B.Tech)'
+    },
+    {
+      name: 'Custom Answer: Laptop question',
+      input: {
+        question: 'Do you have your own personal laptop with high-speed internet?',
+        options: ['Yes', 'No'],
+        inputType: 'chip'
+      },
+      expected: 'Yes'
+    },
+    {
+      name: 'Custom Answer: Night shift question',
+      input: {
+        question: 'Are you comfortable working in night shifts?',
+        options: ['Yes', 'No'],
+        inputType: 'chip'
+      },
+      expected: 'No'
+    },
+    {
+      name: 'Custom Answer: AWS experience',
+      input: {
+        question: 'How many years of experience do you have with AWS cloud services?',
+        options: [],
+        inputType: 'number'
+      },
+      expected: '2'
     }
   ];
 

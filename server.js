@@ -347,6 +347,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 3b. Custom Answers Q&A API (GET & POST)
+  if (pathname === '/api/custom-answers') {
+    const customFile = path.join(__dirname, 'custom-answers.json');
+    if (req.method === 'GET') {
+      let data = {};
+      try {
+        if (fs.existsSync(customFile)) data = JSON.parse(fs.readFileSync(customFile, 'utf8'));
+      } catch {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data, null, 2));
+      return;
+    }
+    if (req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          fs.writeFileSync(customFile, JSON.stringify(parsed, null, 2));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, message: 'Custom answers saved successfully.' }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+        }
+      });
+      return;
+    }
+  }
+
   // 4. Download CSV or view generated external-jobs.html
   if (pathname === '/api/export/csv' && req.method === 'GET') {
     if (fs.existsSync(EXTERNAL_CSV)) {

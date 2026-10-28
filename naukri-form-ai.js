@@ -5,10 +5,25 @@
  */
 
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
 // Helper to sanitize strings for comparison
 function clean(str) {
   return String(str || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Loads custom question-to-answer overrides from custom-answers.json
+ */
+function loadCustomAnswers() {
+  try {
+    const p = path.join(__dirname, 'custom-answers.json');
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  } catch {}
+  return {};
 }
 
 /**
@@ -98,6 +113,18 @@ async function resolveAnswer({ question, options = [], inputType = 'text', CV = 
   const currentCtcNum = extractNum(CV.currentCTC, 8);
   const expectedCtcNum = extractNum(CV.expectedCTC, 15);
   const noticeDays = extractNum(CV.noticePeriod, 15);
+
+  // 0. User-defined Custom Question Overrides (from custom-answers.json)
+  const customMap = loadCustomAnswers();
+  for (const [key, val] of Object.entries(customMap)) {
+    if (q.includes(clean(key))) {
+      if (hasOptions) {
+        const opt = findOption(o => o.clean === clean(val) || o.clean.includes(clean(val)) || clean(val).includes(o.clean));
+        if (opt) return opt;
+      }
+      return String(val);
+    }
+  }
 
   // 1. Notice Period / Availability
   if (q.includes('notice') || q.includes('serving notice') || q.includes('availability') || q.includes('how soon') || q.includes('joining time') || q.includes('join in')) {
@@ -627,6 +654,7 @@ async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log 
 
 module.exports = {
   clean,
+  loadCustomAnswers,
   resolveAnswer,
   askGemini,
   handleApplicationDrawer,
