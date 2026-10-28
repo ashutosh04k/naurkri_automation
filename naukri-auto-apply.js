@@ -8,7 +8,8 @@
 const { chromium } = require('playwright-core');
 const path = require('path');
 const fs   = require('fs');
-const { CV } = require('./config');
+const { CV, geminiKey } = require('./config');
+const { handleApplicationDrawer } = require('./naukri-form-ai');
 
 const PROFILE_DIR  = path.join(__dirname, '.naukri-chrome-profile');
 const LOG_FILE     = path.join(__dirname, 'naukri-apply.log');
@@ -21,6 +22,8 @@ const DRY_RUN      = process.argv.includes('--dry-run');
 // ── Search config ─────────────────────────────────────────────────────────────
 const JOB_TITLES = [
   'React Developer',
+  'Front end Developer',
+  'Front-end Developer',
   'Frontend Developer',
   'Software Developer',
   'Software Engineer',
@@ -452,8 +455,8 @@ async function applyToJob(page, jobUrl, applied, external) {
       }
     }
 
-    // Modal or questionnaire
-    const ok = await fillApplyModal(page);
+    // Modal or questionnaire / chatbot drawer
+    const ok = await handleApplicationDrawer(page, { CV, geminiKey, log });
     if (ok) {
       applied.add(jobUrl);
       saveApplied(applied);
