@@ -21,14 +21,14 @@ const DRY_RUN      = process.argv.includes('--dry-run');
 
 // ── Search config ─────────────────────────────────────────────────────────────
 const JOB_TITLES = [
-  'React Developer',
+  'Fullstack Developer',
+  'MERN Stack Developer',
   'Front end Developer',
   'Front-end Developer',
+  'React Developer',
   'Frontend Developer',
   'Software Developer',
   'Software Engineer',
-  'MERN Stack Developer',
-  'Fullstack Developer',
 ];
 const LOCATIONS        = ['Pune', 'Mumbai', 'Bangalore','Gurugram','Noida','Delhi','Hyderabad','Ahmedabad','Kolkata','Kochi','Mangalore','Chennai'];
 const EXPERIENCE_YEARS = 3;
