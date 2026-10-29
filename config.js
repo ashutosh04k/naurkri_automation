@@ -58,7 +58,8 @@ const CV = {
 };
 
 const CREDS = { email: g('GOOGLE_EMAIL') || g('EMAIL'), password: g('GOOGLE_PASSWORD') };
+const groqApiKey = g('GROQ_API_KEY') || g('GROQ_KEY');
 const geminiKey = g('GEMINI_KEY');
 const naukriProfileUrl = g('NAUKRI_PROFILE_URL', 'https://www.naukri.com/mnjuser/profile');
 
-module.exports = { CV, CREDS, geminiKey, naukriProfileUrl };
+module.exports = { CV, CREDS, groqApiKey, geminiKey, naukriProfileUrl };

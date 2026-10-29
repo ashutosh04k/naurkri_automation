@@ -27,6 +27,76 @@ function loadCustomAnswers() {
 }
 
 /**
+ * Calls Groq Cloud REST API with a timeout (Ultra-fast & free tier)
+ */
+async function askGroq(prompt, groqApiKey, timeoutMs = 3000) {
+  if (!groqApiKey) return null;
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    try {
+      const payload = JSON.stringify({
+        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an accurate job applicant assistant filling screener questions on Naukri.com. Return direct, concise answers without pleasantries or markdown.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 60,
+      });
+
+      const req = https.request({
+        hostname: 'api.groq.com',
+        port: 443,
+        path: '/openai/v1/chat/completions',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqApiKey}`,
+          'Content-Length': Buffer.byteLength(payload),
+        },
+        timeout: timeoutMs,
+      }, (res) => {
+        let body = '';
+        res.on('data', (c) => { body += c; });
+        res.on('end', () => {
+          clearTimeout(timer);
+          try {
+            const json = JSON.parse(body);
+            const ans = json?.choices?.[0]?.message?.content?.trim();
+            resolve(ans || null);
+          } catch {
+            resolve(null);
+          }
+        });
+      });
+
+      req.on('error', () => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        clearTimeout(timer);
+        resolve(null);
+      });
+
+      req.write(payload);
+      req.end();
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
+}
+
+/**
  * Calls Gemini Flash REST API with a timeout
  */
 async function askGemini(prompt, geminiKey, timeoutMs = 3000) {
@@ -92,7 +162,7 @@ async function askGemini(prompt, geminiKey, timeoutMs = 3000) {
 /**
  * Resolve answer for a given question and available options/inputType
  */
-async function resolveAnswer({ question, options = [], inputType = 'text', CV = {}, geminiKey = null }) {
+async function resolveAnswer({ question, options = [], inputType = 'text', CV = {}, groqApiKey = null, geminiKey = null }) {
   const q = clean(question);
   const optsClean = options.map(o => ({ original: o, clean: clean(o) }));
   const hasOptions = options.length > 0;
@@ -307,8 +377,8 @@ async function resolveAnswer({ question, options = [], inputType = 'text', CV = 
     return yesOpt;
   }
 
-  // 11. Tier 2: AI Fallback with Gemini if available
-  if (geminiKey) {
+  // 11. Tier 2: AI Fallback with Groq (Primary) or Gemini (Secondary)
+  if (groqApiKey || geminiKey) {
     const prompt = `You are filling a job application on Naukri.com for this candidate:
 Name: ${CV.name || 'Candidate'}
 Current Role: ${CV.currentRole || 'Software Engineer'}
@@ -331,7 +401,14 @@ Rules:
 3. If it's a free-text answer, provide a professional, positive 1-sentence answer.
 4. Output ONLY the answer, with no quotes or extra text.`;
 
-    const aiAnswer = await askGemini(prompt, geminiKey);
+    let aiAnswer = null;
+    if (groqApiKey) {
+      aiAnswer = await askGroq(prompt, groqApiKey);
+    }
+    if (!aiAnswer && geminiKey) {
+      aiAnswer = await askGemini(prompt, geminiKey);
+    }
+
     if (aiAnswer) {
       if (hasOptions) {
         const matched = optsClean.find(o => clean(aiAnswer).includes(o.clean) || o.clean.includes(clean(aiAnswer)));
@@ -351,7 +428,7 @@ Rules:
  * Main function: Interacts with the active application drawer or modal on the page
  * Loops through questions sequentially until submitted or drawer closes.
  */
-async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log }) {
+async function handleApplicationDrawer(page, { CV, groqApiKey, geminiKey, log = console.log }) {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // Success indicators
@@ -500,6 +577,7 @@ async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log 
           options: optTexts,
           inputType: 'select',
           CV,
+          groqApiKey,
           geminiKey,
         });
 
@@ -523,6 +601,7 @@ async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log 
         options: drawerInfo.chips,
         inputType: 'chip',
         CV,
+        groqApiKey,
         geminiKey,
       });
 
@@ -556,6 +635,7 @@ async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log 
         options: radioLabels,
         inputType: 'radio',
         CV,
+        groqApiKey,
         geminiKey,
       });
 
@@ -588,6 +668,7 @@ async function handleApplicationDrawer(page, { CV, geminiKey, log = console.log 
           question: effectiveQ,
           inputType: input.type,
           CV,
+          groqApiKey,
           geminiKey,
         });
 
@@ -656,6 +737,7 @@ module.exports = {
   clean,
   loadCustomAnswers,
   resolveAnswer,
+  askGroq,
   askGemini,
   handleApplicationDrawer,
 };
