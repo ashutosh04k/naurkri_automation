@@ -108,6 +108,18 @@ function getStats() {
   };
 }
 
+function sortExternalJobs(jobsObj) {
+  return Object.values(jobsObj || {}).sort((a, b) => {
+    // 1. Primary: Sort by extractedAtTimestamp descending (newest extracted job at the very top)
+    const timeA = Number(a.extractedAtTimestamp) || (a.extractedAt ? new Date(a.extractedAt).getTime() : 0) || (a.foundOn ? new Date(a.foundOn).getTime() : 0) || 0;
+    const timeB = Number(b.extractedAtTimestamp) || (b.extractedAt ? new Date(b.extractedAt).getTime() : 0) || (b.foundOn ? new Date(b.foundOn).getTime() : 0) || 0;
+    if (timeB !== timeA) return timeB - timeA;
+
+    // 2. Secondary fallback: postedOn date
+    return (b.postedOn || '').localeCompare(a.postedOn || '');
+  });
+}
+
 function getData() {
   let appliedList = [];
   let externalList = [];
@@ -122,7 +134,7 @@ function getData() {
   try {
     if (fs.existsSync(EXTERNAL_FILE)) {
       const extObj = JSON.parse(fs.readFileSync(EXTERNAL_FILE, 'utf8'));
-      externalList = Object.values(extObj).sort((a, b) => (b.postedOn || '').localeCompare(a.postedOn || ''));
+      externalList = sortExternalJobs(extObj);
     }
   } catch {}
 
@@ -178,6 +190,12 @@ function runScript(scriptFile, args, taskName, onFinish) {
     const text = d.toString();
     process.stdout.write(text);
     logToClients(text, 'stdout');
+
+    // Live real-time update on dashboard whenever an external job is captured or job applied
+    if (text.includes('SAVED EXTERNAL') || text.includes('APPLIED [') || text.includes('[Company Site Job Detected]')) {
+      broadcastSSE('status', getStats());
+      broadcastSSE('data-refresh', getData());
+    }
   });
 
   child.stderr.on('data', (d) => {
@@ -335,14 +353,24 @@ const server = http.createServer((req, res) => {
 
   // 2. Status API
   if (pathname === '/api/status' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     res.end(JSON.stringify(getStats()));
     return;
   }
 
   // 3. Full Data API (profile, applied, external)
   if (pathname === '/api/data' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     res.end(JSON.stringify(getData()));
     return;
   }
