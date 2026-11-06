@@ -508,13 +508,24 @@ async function handleApplicationDrawer(page, { CV, groqApiKey, geminiKey, log = 
 
       const lastQuestionText = botMessages.length > 0 ? (botMessages[botMessages.length - 1].innerText || '').trim() : '';
 
-      // Check for clickable chips / option pills
+      // Check for clickable chips / option pills / buttons
       const chips = Array.from(container.querySelectorAll(
-        'button[class*="chip"], span[class*="chip"], div[class*="chip"], li[class*="chip"], .bot-selection-item, [class*="option-item"], [class*="pill"], [class*="chip-item"], [class*="radio-item"], [class*="selection-item"]'
+        'button[class*="chip"], span[class*="chip"], div[class*="chip"], li[class*="chip"], .bot-selection-item, [class*="option-item"], [class*="pill"], [class*="chip-item"], [class*="radio-item"], [class*="selection-item"], [class*="bot-option"], [class*="bot-chip"], [class*="chat-bubble"], [class*="quick-reply"], [role="radio"], [role="option"], ul.bot-list li, .botMsg_options button, .bot-options button, .bot-options div, [class*="chip"] label'
       )).filter(el => {
         const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && el.innerText && el.innerText.trim();
+        const text = (el.innerText || '').trim();
+        return rect.width > 0 && rect.height > 0 && text.length > 0 && !/^(submit|save\s*&|apply\s*now|cancel|close)/i.test(text);
       }).map(el => el.innerText.trim());
+
+      // If chips empty on a Yes/No question, inspect clickable elements for Yes / No
+      if (chips.length === 0 && /(are you|do you|can you|willing|comfortable|authorized|relocate|shift)/i.test(lastQuestionText)) {
+        const anyYesNo = Array.from(container.querySelectorAll('button, span, div, li, a, label')).filter(el => {
+          const rect = el.getBoundingClientRect();
+          const t = (el.innerText || '').trim().toLowerCase();
+          return rect.width > 0 && rect.height > 0 && (t === 'yes' || t === 'no');
+        }).map(el => el.innerText.trim());
+        if (anyYesNo.length > 0) chips.push(...new Set(anyYesNo));
+      }
 
       // Check for radio inputs
       const radios = Array.from(container.querySelectorAll('input[type="radio"]')).filter(r => {
@@ -695,16 +706,24 @@ async function handleApplicationDrawer(page, { CV, groqApiKey, geminiKey, log = 
       }
     }
 
-    // E. Check for Submit / Save & Apply button
+    // E. Check for Submit / Save & Apply button strictly inside the drawer or modal container
     const submitBtn = page.locator([
+      '.chatbot_Drawer button:has-text("Save & Apply")',
+      '.chatbot_Drawer button:has-text("Save and Apply")',
+      '.chatbot_Drawer button:has-text("Submit Application")',
+      '.chatbot_Drawer button:has-text("Submit")',
+      '.chatbot_Drawer button:has-text("Apply Now")',
+      '.chatbot_Drawer button[type="submit"]',
+      '.modal-container button:has-text("Save & Apply")',
+      '.modal-container button:has-text("Save and Apply")',
+      '.modal-container button:has-text("Submit Application")',
+      '.modal-container button:has-text("Submit")',
+      '.drawer-wrapper button:has-text("Save & Apply")',
+      '[role="dialog"] button:has-text("Save & Apply")',
+      '[role="dialog"] button:has-text("Submit")',
       'button:has-text("Save & Apply")',
       'button:has-text("Save and Apply")',
       'button:has-text("Submit Application")',
-      'button:has-text("Submit")',
-      'button:has-text("Apply Now")',
-      'button:has-text("Apply")',
-      'button:has-text("Confirm")',
-      'button[type="submit"]',
     ].join(', ')).first();
 
     if (await submitBtn.isVisible().catch(() => false)) {

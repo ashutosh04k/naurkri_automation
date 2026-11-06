@@ -1586,5 +1586,29 @@
     "extractedAt": "1 Nov 2026, 12:31 pm IST",
     "extractedAtTimestamp": 1793516517914,
     "foundOn": "2026-11-01"
+  },
+  "https://www.naukri.com/job-listings-fullstack-developer-tekwissen-india-bengaluru-3-to-5-years-051126501198": {
+    "title": "FullStack Developer",
+    "company": "TekWissen",
+    "location": "Bengaluru",
+    "experience": "3 - 5 yearsNot Disclosed",
+    "externalUrl": "https://tekwissen.com/career/india/?job_id=z5G7h3l6a1kMvyS65NP3c5Jsio1JGhAWz73p9mycHRE%3D",
+    "naukriUrl": "https://www.naukri.com/job-listings-fullstack-developer-tekwissen-india-bengaluru-3-to-5-years-051126501198",
+    "postedOn": "2026-11-04",
+    "extractedAt": "6 Nov 2026, 12:15 pm IST",
+    "extractedAtTimestamp": 1793947500422,
+    "foundOn": "2026-11-06"
+  },
+  "https://www.naukri.com/job-listings-oic-developer-gapblue-software-labs-private-limited-kochi-3-to-5-years-041126501579": {
+    "title": "OIC Developer",
+    "company": "Gapblue Software Labs",
+    "location": "Kochi",
+    "experience": "3 - 5 yearsNot Disclosed",
+    "externalUrl": "https://www.gapblue.com/careers",
+    "naukriUrl": "https://www.naukri.com/job-listings-oic-developer-gapblue-software-labs-private-limited-kochi-3-to-5-years-041126501579",
+    "postedOn": "2026-11-03",
+    "extractedAt": "6 Nov 2026, 12:19 pm IST",
+    "extractedAtTimestamp": 1793947745620,
+    "foundOn": "2026-11-06"
   }
 }
